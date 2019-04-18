@@ -16,6 +16,7 @@ int main() {
     struct sockaddr_in my_addr; /* my address */
     struct sockaddr_in their_addr; /* connector address */
     unsigned int sin_size;
+    char buf[1024];
 
     /* create a socket */
     if((sockfd = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
@@ -51,8 +52,13 @@ int main() {
             perror("accept");
             continue;
         }
-        printf("server: got connection from %s\n",
+        printf("server: got connection from %s\n\n",
                inet_ntoa(their_addr.sin_addr));
+        int len = recv(new_fd, buf, sizeof(buf), 0);
+        printf("request header: \n%s", buf);
+        send(new_fd, buf, len, 0);
         close(new_fd);
     }
+    
+    close(sockfd);
 }
