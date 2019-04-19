@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <string>
 #include <sstream>
+#include "request.h"
+#include "request_parser.h"
 #define MYPORT 8080
 #define BACKLOG 1 /* pending connections queue size */
 
@@ -19,6 +21,8 @@ int main() {
     struct sockaddr_in their_addr; /* connector address */
     unsigned int sin_size;
     char buf[1024];
+    request request_;
+    request_parser request_parser_;
 
     /* create a socket */
     if((sockfd = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
@@ -58,10 +62,15 @@ int main() {
                inet_ntoa(their_addr.sin_addr));
         int len = read(new_fd, buf, sizeof(buf));
         printf("request header: \n%s\n", buf);
-        std::stringstream resp;
-        resp << "HTTP/1.1 200 OK\r\n\r\n";
-        resp << buf;
-        write(new_fd, resp.str().c_str(), resp.str().length());
+        request_parser::result_type result = request_parser_.parse(request_, buf, buf + len);
+        if(result == request_parser::good) {
+            std::stringstream resp;
+            resp << "HTTP/1.1 200 OK\r\n\r\n";
+            resp << buf;
+            write(new_fd, resp.str().c_str(), resp.str().length());
+        } else {
+            printf("Bad request!\n");
+        }
         close(new_fd);
     }
     
