@@ -71,6 +71,8 @@ int main() {
         } else {
             printf("Bad request!\n");
         }
+        request_.clear();
+        request_parser_.reset();
         close(new_fd);
     }
     
