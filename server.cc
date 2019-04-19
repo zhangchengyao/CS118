@@ -39,6 +39,31 @@ std::string extension_to_type(const std::string& extension) {
   return "text/plain";
 }
 
+bool serve_static_file(int sockfd, std::string filename) {
+    char buf[1024];
+    FILE *fp = fopen("index.html", "r");
+    int file_block_length = 0;
+    std::stringstream resp;
+    resp << "HTTP/1.1 200 OK\r\n";
+    resp << "Content-Type: text/html\r\n\r\n";
+    bzero(buf, sizeof(buf));
+    write(sockfd, resp.str().c_str(), resp.str().length());
+    while( (file_block_length = fread(buf, sizeof(char), 1024, fp)) > 0)
+    {
+        // printf("file_block_length = %d\n", file_block_length);
+
+        // 发送buffer中的字符串到new_server_socket,实际上就是发送给客户端
+        if (write(sockfd, buf, file_block_length) < 0)
+        {
+            printf("Send File:\t%s Failed!\n", "file_name");
+            return false;
+        }
+        bzero(buf, sizeof(buf));
+    }
+    fclose(fp);
+    return true;
+}
+
 int main() {
     int sockfd, new_fd; /* listen on sock_fd, new connection on new_fd */
     struct sockaddr_in my_addr; /* my address */
@@ -87,11 +112,15 @@ int main() {
         int len = read(new_fd, buf, sizeof(buf));
         printf("request header: \n%s\n", buf);
         request_parser::result_type result = request_parser_.parse(request_, buf, buf + len);
-        if(result == request_parser::good) {
-            std::stringstream resp;
-            resp << "HTTP/1.1 200 OK\r\n\r\n";
-            resp << buf;
-            write(new_fd, resp.str().c_str(), resp.str().length());
+        if(result == request_parser::good) {  
+            if (request_.uri != "/") {
+                serve_static_file(new_fd, "");
+            } else {
+                std::stringstream resp;
+                resp << "HTTP/1.1 200 OK\r\n\r\n";
+                resp << buf;
+                write(new_fd, resp.str().c_str(), resp.str().length());
+            }
         } else {
             printf("Bad request!\n");
         }
