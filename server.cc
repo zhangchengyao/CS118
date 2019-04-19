@@ -15,6 +15,30 @@
 #define MYPORT 8080
 #define BACKLOG 1 /* pending connections queue size */
 
+struct mimetype_mapping {
+    const char* extension;
+    const char* mime_type;
+} mappings[] = {
+    { "gif", "image/gif" },
+    { "htm", "text/html" },
+    { "html", "text/html" },
+    { "jpg", "image/jpeg" },
+    { "jpeg", "image/jpeg" },
+    { "tar", "application/x-tar" },
+    { "png", "image/png" },
+    { "txt", "text/plain"},
+    { "zip", "application/zip"}
+};
+
+std::string extension_to_type(const std::string& extension) {
+  for(mimetype_mapping m: mappings) {
+    if(m.extension == extension) {
+      return m.mime_type;
+    }
+  }
+  return "text/plain";
+}
+
 int main() {
     int sockfd, new_fd; /* listen on sock_fd, new connection on new_fd */
     struct sockaddr_in my_addr; /* my address */
