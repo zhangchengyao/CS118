@@ -8,8 +8,10 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <string>
+#include <sstream>
 #define MYPORT 8080
-#define BACKLOG 10 /* pending connections queue size */
+#define BACKLOG 1 /* pending connections queue size */
 
 int main() {
     int sockfd, new_fd; /* listen on sock_fd, new connection on new_fd */
@@ -54,11 +56,15 @@ int main() {
         }
         printf("server: got connection from %s\n\n",
                inet_ntoa(their_addr.sin_addr));
-        int len = recv(new_fd, buf, sizeof(buf), 0);
-        printf("request header: \n%s", buf);
-        send(new_fd, buf, len, 0);
+        int len = read(new_fd, buf, sizeof(buf));
+        printf("request header: \n%s\n", buf);
+        std::stringstream resp;
+        resp << "HTTP/1.1 200 OK\r\n\r\n";
+        resp << buf;
+        write(new_fd, resp.str().c_str(), resp.str().length());
         close(new_fd);
     }
     
     close(sockfd);
+    return 0;
 }
