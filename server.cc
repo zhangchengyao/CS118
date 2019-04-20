@@ -8,9 +8,12 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <unordered_map>
+#include <algorithm>
 #include "request.h"
 #include "request_parser.h"
 #define MAX_BUF_SIZE 1024
@@ -47,27 +50,39 @@ std::string get_file_name(std::string str) {
         return str.substr(str.rfind("/") + 1);
     }
 }
-// bool serve_static_file(int sockfd, std::string filename) {
-//     char buf[MAX_BUF_SIZE];
-//     FILE *fp = fopen("index.html", "r");
-//     int file_block_length = 0;
-//     std::stringstream resp;
-//     resp << "HTTP/1.1 200 OK\r\n";
-//     resp << "Content-Type: text/html\r\n\r\n";
-//     bzero(buf, sizeof(buf));
-//     write(sockfd, resp.str().c_str(), resp.str().length());
-//     while( (file_block_length = fread(buf, sizeof(char), 1024, fp)) > 0)
-//     {
-//         // printf("file_block_length = %d\n", file_block_length);
 
-//         // 发送buffer中的字符串到new_server_socket,实际上就是发送给客户端
-//         if (write(sockfd, buf, file_block_length) < 0)
-//         {
-//             printf("Send File:\t%s Failed!\n", "file_name");
-//             return false;
-//         }
-//         bzero(buf, sizeof(buf));
-//     }
+void to_lower(char* arr) {
+    int len = strlen(arr);
+    for(int i = 0; i < len; i++) {
+        if(arr[i] >= 'A' && arr[i] <= 'Z') {
+            arr[i] = arr[i] - 'A' + 'a';
+        }
+    }
+}
+
+// reference: https://stackoverflow.com/questions/612097/how-can-i-get-the-list-of-files-in-a-directory-using-c-or-c
+std::unordered_map<std::string, std::string> get_all_files() {
+    char buf[MAX_BUF_SIZE];
+    getcwd(buf, MAX_BUF_SIZE);
+    DIR* dir;
+    struct dirent* ent;
+    if((dir = opendir(buf)) != NULL) {
+        std::unordered_map<std::string, std::string> mymap;
+    /* print all the files and directories within directory */
+        while((ent = readdir(dir)) != NULL) {
+            char temp[MAX_BUF_SIZE];
+            strcpy(temp, ent->d_name);
+            to_lower(temp);
+            mymap[temp] = ent->d_name;
+        }
+        return mymap;
+        closedir (dir);
+    } else {
+    /* could not open directory */
+        perror ("open directory");
+        exit(1);
+    }
+}
 
 // reference: https://www.boost.org/doc/libs/1_39_0/doc/html/boost_asio/example/http/server3/request_handler.cpp
 
@@ -98,6 +113,7 @@ bool url_decode(const std::string& in, std::string& out) {
 }
 
 std::string serve_static_file(std::string file) {
+    std::unordered_map<std::string, std::string> mymap = get_all_files();
     std::stringstream response;
     std::string decoded;
     
@@ -107,8 +123,14 @@ std::string serve_static_file(std::string file) {
         return response.str();
     }
 
+    std::transform(decoded.begin(), decoded.end(), decoded.begin(), ::tolower);
+    if(mymap.find(decoded) == mymap.end()) {
+        response << "HTTP/1.1 404 Not Found\r\n\r\n";
+        response << "Not Found!";
+        return response.str();
+    }
     // Open the file
-	std::ifstream is(decoded.c_str(), std::ios::in | std::ios::binary);
+	std::ifstream is(mymap[decoded].c_str(), std::ios::in | std::ios::binary);
     if(!is) {
         response << "HTTP/1.1 400 Bad Request\r\n\r\n";
         response << "open file!";
