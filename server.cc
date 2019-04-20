@@ -114,7 +114,7 @@ std::string serve_static_file(std::string file) {
         response << "open file!";
         return response.str();
     }
-    char buf[512];
+    char buf[MAX_BUF_SIZE];
 	std::string fileContent = "";
 	while(is.read(buf, sizeof(buf)).gcount() > 0) {
 		fileContent.append(buf, is.gcount());
@@ -191,6 +191,7 @@ int main(int argc, char *argv[]) {
         }
         printf("server: got connection from %s\n\n",
                inet_ntoa(their_addr.sin_addr));
+        memset(buf, 0, sizeof(buf));
         int len = read(new_fd, buf, sizeof(buf));
         printf("request header: \n%s\n", buf);
         request_parser::result_type result = request_parser_.parse(request_, buf, buf + len);
