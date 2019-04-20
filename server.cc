@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include "request.h"
 #include "request_parser.h"
 #define MYPORT 8080
@@ -37,6 +38,84 @@ std::string extension_to_type(const std::string& extension) {
     }
   }
   return "text/plain";
+}
+
+std::string get_file_name(std::string str) {
+    if(str.rfind("/") == -1) {
+        return "";
+    } else {
+        return str.substr(str.rfind("/") + 1);
+    }
+}
+
+// reference: https://www.boost.org/doc/libs/1_39_0/doc/html/boost_asio/example/http/server3/request_handler.cpp
+
+bool url_decode(const std::string& in, std::string& out) {
+	out.clear();
+	out.reserve(in.size());
+	for(std::size_t i = 0; i < in.size(); ++i) {
+		if(in[i] == '%') {
+			if(i + 3 <= in.size()) {
+				int value = 0;
+				std::istringstream is(in.substr(i + 1, 2));
+				if (is >> std::hex >> value) {
+					out += static_cast<char>(value);
+					i += 2;
+				} else {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		} else if(in[i] == '+') {
+			out += ' ';
+		} else {
+			out += in[i];
+		}
+	}
+  	return true;
+}
+
+std::string serve_static_file(std::string file) {
+    std::stringstream response;
+    std::string decoded;
+    
+    if(!url_decode(file, decoded)) {
+        response << "HTTP/1.1 400 Bad Request\r\n\r\n";
+        response << "url decode!";
+        return response.str();
+    }
+
+    // Open the file
+	std::ifstream is(decoded.c_str(), std::ios::in | std::ios::binary);
+    if(!is) {
+        response << "HTTP/1.1 400 Bad Request\r\n\r\n";
+        response << "open file!";
+        return response.str();
+    }
+    char buf[512];
+	std::string fileContent = "";
+	while(is.read(buf, sizeof(buf)).gcount() > 0) {
+		fileContent.append(buf, is.gcount());
+	}
+
+    // Determine the file extension. (txt, jpg, html....)
+	std::size_t last_dot_pos = decoded.find_last_of(".");
+	std::string extension = "";
+	if(last_dot_pos != std::string::npos) {
+		extension = decoded.substr(last_dot_pos + 1);
+	}
+
+    response << "HTTP/1.1 200 OK\r\n";
+    response << "Content-Length: " << std::to_string(fileContent.size()) << "\r\n";
+    if(!extension.empty()) {
+        response << "Content-Type: " << extension_to_type(extension) << "\r\n";
+    } else {
+        response << "Content-Type: " << "text/plain\r\n";
+    }
+    response << "\r\n";
+    response << fileContent;
+    return response.str();
 }
 
 int main() {
@@ -88,10 +167,9 @@ int main() {
         printf("request header: \n%s\n", buf);
         request_parser::result_type result = request_parser_.parse(request_, buf, buf + len);
         if(result == request_parser::good) {
-            std::stringstream resp;
-            resp << "HTTP/1.1 200 OK\r\n\r\n";
-            resp << buf;
-            write(new_fd, resp.str().c_str(), resp.str().length());
+            std::string target = get_file_name(request_.uri);
+            std::string resp = serve_static_file(target);
+            write(new_fd, resp.c_str(), resp.size());
         } else {
             printf("Bad request!\n");
         }
