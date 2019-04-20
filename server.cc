@@ -12,7 +12,7 @@
 #include <sstream>
 #include "request.h"
 #include "request_parser.h"
-#define MYPORT 8080
+#define MAX_BUF_SIZE 1024
 #define BACKLOG 1 /* pending connections queue size */
 
 struct mimetype_mapping {
@@ -40,7 +40,7 @@ std::string extension_to_type(const std::string& extension) {
 }
 
 bool serve_static_file(int sockfd, std::string filename) {
-    char buf[1024];
+    char buf[MAX_BUF_SIZE];
     FILE *fp = fopen("index.html", "r");
     int file_block_length = 0;
     std::stringstream resp;
@@ -64,12 +64,19 @@ bool serve_static_file(int sockfd, std::string filename) {
     return true;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if(argc != 2) {
+        printf("Usage: ./server <portnum>\n");
+        return 1;
+    }
+
+    int portnum = std::atoi(argv[1]);
+
     int sockfd, new_fd; /* listen on sock_fd, new connection on new_fd */
     struct sockaddr_in my_addr; /* my address */
     struct sockaddr_in their_addr; /* connector address */
     unsigned int sin_size;
-    char buf[1024];
+    char buf[MAX_BUF_SIZE];
     request request_;
     request_parser request_parser_;
 
@@ -81,7 +88,7 @@ int main() {
 
     /* set the address info */
     my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(MYPORT); /* short, network byte order */
+    my_addr.sin_port = htons(portnum); /* short, network byte order */
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     /* INADDR_ANY allows clients to connect to any one of the host's IP
     address. Optionally, use this line if you know the IP to use:
