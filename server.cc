@@ -219,17 +219,16 @@ int main(int argc, char *argv[]) {
         request_parser::result_type result = request_parser_.parse(request_, buf, buf + len);
         if(result == request_parser::good) {
             std::string target = get_file_name(request_.uri);
-            std::string resp = serve_static_file(target);
+            std::string resp;
+            if(!target.empty()) {
+                resp = serve_static_file(target);
+            } else {
+                std::stringstream ss;
+                ss << "HTTP/1.1 200 OK\r\n\r\n";
+                ss << buf;
+                resp = ss.str();
+            }
             write(new_fd, resp.c_str(), resp.size());
-        // if(result == request_parser::good) {  
-        //     if (request_.uri != "/") {
-        //         serve_static_file(new_fd, "");
-        //     } else {
-        //         std::stringstream resp;
-        //         resp << "HTTP/1.1 200 OK\r\n\r\n";
-        //         resp << buf;
-        //         write(new_fd, resp.str().c_str(), resp.str().length());
-        //     }
         } else {
             printf("Bad request!\n");
         }
