@@ -11,7 +11,10 @@
 #include <arpa/inet.h>
 #include <fstream>
 
-#define MAX_BUF_SIZE 1024
+#include "rdt_header.h"
+
+#define HEADER_SIZE 12
+#define MAX_BUF_SIZE 512
 
 int main(int argc, char *argv[]){
 	if(argc != 4) {
@@ -26,8 +29,11 @@ int main(int argc, char *argv[]){
 		perror("open file error");
 		return 1;
 	}
-	char buf[MAX_BUF_SIZE];
-	is.read(buf, sizeof(buf));
+	char fileBuf[MAX_BUF_SIZE];
+	is.read(fileBuf, sizeof(fileBuf));
+
+	buffer buf;
+	strcpy(buf.data, fileBuf);
 
     int sockfd;
     int len;
@@ -44,11 +50,11 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
-	printf("sending: %s\n", buf); 
+	printf("sending: %s\n", buf.data); 
 
 	sin_size = sizeof(struct sockaddr_in);
 	
-	if((len = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *) &server_addr, sizeof(struct sockaddr))) < 0){
+	if((len = sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &server_addr, sizeof(struct sockaddr))) < 0){
 		perror("recvfrom"); 
 		return 1;
 	}

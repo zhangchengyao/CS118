@@ -14,7 +14,10 @@
 #include <fstream>
 #include <unordered_map>
 #include <algorithm>
-#define MAX_BUF_SIZE 1024
+
+#include "rdt_header.h"
+
+#define HEADER_SIZE 12
 #define BACKLOG 1 /* pending connections queue size */
 
 int main(int argc, char *argv[]){
@@ -32,7 +35,7 @@ int main(int argc, char *argv[]){
 
     unsigned int sin_size;
     int len;
-    char buf[MAX_BUF_SIZE];
+    buffer buf;
 
     /* create a socket */
     if((server_sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -60,13 +63,13 @@ int main(int argc, char *argv[]){
     printf("waiting for a packet...\n");
 
     while(1){
-        if((len = recvfrom(server_sockfd, buf, MAX_BUF_SIZE, 0, (struct sockaddr *) &their_addr, &sin_size)) < 0){
+        if((len = recvfrom(server_sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0){
             perror("recvfrom error"); 
             return 1;
         }
         printf("received packet from %s:\n", inet_ntoa(their_addr.sin_addr));
-        buf[len] = '\0';
-        printf("contents: %s\n", buf);
+        buf.data[len - HEADER_SIZE] = '\0';
+        printf("contents: %s\n", buf.data);
     }
     
 	close(server_sockfd);
