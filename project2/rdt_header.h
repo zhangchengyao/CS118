@@ -1,10 +1,8 @@
 #include <cstdint>
 
 struct header {
-    uint16_t sourcePort;
-    uint16_t destPort;
-    uint16_t seqNum;
-    uint16_t ackNum;
-    uint16_t length;
+    uint32_t seqNum;
+    uint32_t ackNum;
     uint16_t flags;
+    uint16_t reserved;
 };
