@@ -2,18 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/wait.h>
+#include <string>
+#include <iostream>
+#include <fstream>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <dirent.h>
-#include <string>
-#include <sstream>
-#include <fstream>
-#include <unordered_map>
-#include <algorithm>
 
 #include "rdt_header.h"
 
@@ -29,28 +23,29 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
     serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
     memset(serverPkt.data, sizeof(serverPkt.data), '\0');
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
-        perror("send SYNACK packet");
+        std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
     }
+
     printf("send SYNACK packet to: %s\n", inet_ntoa(their_addr.sin_addr));
 
     // receive ACK packet from client, finish 3-way handshake
     if(recvfrom(server_sockfd, &clientPkt, sizeof(clientPkt), 0, (struct sockaddr*) &their_addr, &sin_size) < 0) {
-        perror("receive ACK from client");
+        std::cerr << "ERROR: receive ACK from client" << std::endl;
         return false;
     }
     printf("receive ACK packet from: %s\n", inet_ntoa(their_addr.sin_addr));
     if(clientPkt.hd.ackNum == serverPkt.hd.seqNum + 1) {
         return true;
     } else {
-        perror("ACKnum");
+        std::cerr << "ACKnum" << std::endl;
         return false;
     }
 }
 
 int main(int argc, char *argv[]){
     if(argc != 2) {
-        printf("Usage: ./server <portnum>\n");
+        std::cerr << "ERROR: Usage: ./server <portnum>" << std::endl;
         return 1;
     }
 
@@ -67,7 +62,7 @@ int main(int argc, char *argv[]){
 
     /* create a socket */
     if((server_sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
-        perror("socket");
+        std::cerr << "ERROR: create socket" << std::endl;
         exit(1);
     }
 
@@ -83,7 +78,7 @@ int main(int argc, char *argv[]){
 
     /* bind the socket */
     if(bind(server_sockfd, (struct sockaddr*) &my_addr, sizeof(struct sockaddr)) == -1) {
-        perror("bind");
+        std::cerr << "ERROR: bind" << std::endl;
         exit(1);
     }
 
@@ -93,7 +88,7 @@ int main(int argc, char *argv[]){
     while(1){
         bool connected = false;
         if((len = recvfrom(server_sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0){
-            perror("recvfrom error"); 
+            std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
         }
         if((buf.hd.flags >> 14) & 1) { // SYNbit = 1
