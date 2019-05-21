@@ -23,7 +23,7 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
     serverPkt.hd.flags |= ((1 << 15) | (1 << 14)); // set ACKbit = 1 and SYNbit = 1
     serverPkt.hd.seqNum = rand() % (MAX_SEQ_NUM + 1);
     serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
-    memset(serverPkt.data, sizeof(serverPkt.data), '\0');
+    memset(serverPkt.data, '\0', sizeof(serverPkt.data));
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
         std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
@@ -139,6 +139,13 @@ int main(int argc, char *argv[]) {
         if((buf.hd.flags >> 14) & 1) { // SYNbit = 1
             printf("receive connection from %s:\n", inet_ntoa(their_addr.sin_addr));
             connected = handleConnection(buf, server_sockfd, their_addr, sin_size);
+        } else if((buf.hd.flags >> 13) & 1) { // FINbit = 1
+            std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
+            std::cout << "FIN ... " << std::endl;
+            if(!closeConnection(buf, server_sockfd, their_addr, sin_size)) {
+                std::cerr << "ERROR: close connection" << std::endl;
+            }
+            continue;
         }
 
         if(connected) {
