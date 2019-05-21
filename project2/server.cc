@@ -15,6 +15,8 @@
 #define BACKLOG 1 /* pending connections queue size */
 #define MAX_SEQ_NUM 25600
 
+int connectionOrder = 1;
+
 bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
     // choose init seq num, send SYNACK msg, acking SYN from client
     buffer serverPkt;
@@ -43,7 +45,49 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
     }
 }
 
-int main(int argc, char *argv[]){
+bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
+    buffer serverPkt;
+    bzero(&serverPkt, sizeof(serverPkt));
+
+    uint32_t seqNum = rand() % (MAX_SEQ_NUM + 1);
+
+    serverPkt.hd.flags |= (1 << 15); // set ACKbit = 1
+    serverPkt.hd.seqNum = seqNum;
+    serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
+
+    if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
+        std::cerr << "ERROR: send ACK packet" << std::endl;
+        return false;
+    }
+
+    std::cout << "send ACK packet to: " << inet_ntoa(their_addr.sin_addr) << std::endl;
+
+    // ...
+
+    bzero(&serverPkt, sizeof(serverPkt));
+    serverPkt.hd.flags |= (1 << 13); // set FINbit = 1
+    serverPkt.hd.seqNum = seqNum;
+    serverPkt.hd.ackNum = 0;
+
+    if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
+        std::cerr << "ERROR: send FIN packet" << std::endl;
+        return false;
+    }
+
+    std::cout << "send FIN packet to: " << inet_ntoa(their_addr.sin_addr) << std::endl;
+
+    // receive ACK packet from client, close connection
+    if(recvfrom(server_sockfd, &clientPkt, sizeof(clientPkt), 0, (struct sockaddr*) &their_addr, &sin_size) < 0) {
+        std::cerr << "ERROR: receive ACK from client" << std::endl;
+        return false;
+    }
+
+    connectionOrder++;
+    return true;
+}
+
+
+int main(int argc, char *argv[]) {
     if(argc != 2) {
         std::cerr << "ERROR: Usage: ./server <portnum>" << std::endl;
         return 1;
@@ -85,16 +129,18 @@ int main(int argc, char *argv[]){
     sin_size = sizeof(struct sockaddr_in);
     printf("waiting for a packet...\n");
 
-    while(1){
+    while(1) {
         bool connected = false;
-        if((len = recvfrom(server_sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0){
+        if((len = recvfrom(server_sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0) {
             std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
         }
+
         if((buf.hd.flags >> 14) & 1) { // SYNbit = 1
             printf("receive connection from %s:\n", inet_ntoa(their_addr.sin_addr));
             connected = handleConnection(buf, server_sockfd, their_addr, sin_size);
         }
+
         if(connected) {
             printf("establish connection with %s:\n", inet_ntoa(their_addr.sin_addr));
             // TODO receive the file
