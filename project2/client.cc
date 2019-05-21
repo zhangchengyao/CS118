@@ -13,6 +13,61 @@
 
 #define HEADER_SIZE 12
 #define MAX_BUF_SIZE 512
+#define MAX_SEQ_NUM 25600
+
+bool initConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned int& sin_size) {
+	// initiate connection to the server
+	// make the packet
+	uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
+	buf.hd.flags = (1 << 14); // set SYNbit = 1
+	buf.hd.seqNum = curSeqNum;
+	buf.hd.ackNum = 0;
+	buf.hd.reserved = 0;
+	memset(buf.data, '\0', sizeof(buf.data));
+
+	// send the packet to server
+	if(sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+        std::cerr << "ERROR: initConnection sendto" << std::endl;
+		return false;
+	} else {
+		// receive the SYNACK packet from the server
+		if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+			std::cerr << "ERROR: initConnection recvfrom" << std::endl;
+			return false;
+		}
+		// check whether the infomation is right
+		if(buf.hd.flags == ((1 << 15) | (1 << 14)) && buf.hd.ackNum == curSeqNum + 1) {
+			return true;
+		}
+		return false;
+	}
+}
+
+void ackAndTransit(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
+	// ack SYNACK from the server
+	buf.hd.flags = (1 << 15); // set ACKbit = 1
+	uint32_t curSeqNum = buf.hd.ackNum;
+	uint32_t ackNum = buf.hd.seqNum + 1;
+	buf.hd.seqNum = curSeqNum;
+	buf.hd.ackNum = ackNum;
+	buf.hd.reserved = 0;
+
+	// this packet can include data
+	std::ifstream is(file, std::ios::in | std::ios::binary);
+	if(!is) {
+        std::cerr << "ERROR: open file" << std::endl;
+		return;
+	}
+	char fileBuf[MAX_BUF_SIZE];
+	is.read(fileBuf, sizeof(fileBuf));
+	strcpy(buf.data, fileBuf);
+
+	// send the ack packet with data to the server
+	if(sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+        std::cerr << "ERROR: ack SYNACK sendto" << std::endl;
+	}
+	// TODO send large files
+}
 
 int main(int argc, char *argv[]){
 	if(argc != 4) {
@@ -22,19 +77,10 @@ int main(int argc, char *argv[]){
 
 	hostent* host = gethostbyname(argv[1]);
 	int portnum = atoi(argv[2]);
-	std::ifstream is(argv[3], std::ios::in | std::ios::binary);
-	if(!is) {
-        std::cerr << "ERROR: open file" << std::endl;
-		return 1;
-	}
-	char fileBuf[MAX_BUF_SIZE];
-	is.read(fileBuf, sizeof(fileBuf));
 
 	buffer buf;
-	strcpy(buf.data, fileBuf);
-
+	
     int sockfd;
-    int len;
     struct sockaddr_in server_addr;
     unsigned int sin_size;
     
@@ -52,9 +98,11 @@ int main(int argc, char *argv[]){
 
 	sin_size = sizeof(struct sockaddr_in);
 	
-	if((len = sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &server_addr, sizeof(struct sockaddr))) < 0){
-        std::cerr << "ERROR: recvfrom" << std::endl;
-		return 1;
+	bool connected = initConnection(sockfd, buf, server_addr, sin_size);
+	if(connected) {
+		ackAndTransit(sockfd, buf, server_addr, sin_size, argv[3]);
+	} else {
+		std::cerr << "ERROR: init connection" << std::endl;
 	}
  
 	close(sockfd);
