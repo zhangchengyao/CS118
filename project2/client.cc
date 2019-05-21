@@ -62,11 +62,61 @@ void ackAndTransit(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned i
 	is.read(fileBuf, sizeof(fileBuf));
 	strcpy(buf.data, fileBuf);
 
+    std::cout << "sending: " << buf.data << std::endl;
 	// send the ack packet with data to the server
 	if(sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
         std::cerr << "ERROR: ack SYNACK sendto" << std::endl;
 	}
 	// TODO send large files
+}
+
+bool closeConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned int& sin_size) {
+    // send FIN to server
+    uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
+	buf.hd.flags = (1 << 13); // set FINbit = 1
+	buf.hd.seqNum = curSeqNum;
+	buf.hd.ackNum = 0;
+	buf.hd.reserved = 0;
+	memset(buf.data, '\0', sizeof(buf.data));
+
+    if(sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+        std::cerr << "ERROR: closeConnection FIN sendto" << std::endl;
+        return false;
+    }
+
+    // receive the ACK packet from the server
+    if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+        std::cerr << "ERROR: closeConnection ACK recvfrom" << std::endl;
+        return false;
+    }
+
+    if(buf.hd.flags == (1 << 15) && buf.hd.ackNum == (curSeqNum + 1) % MAX_SEQ_NUM) {
+        // wait for 2 seconds...
+
+        uint32_t serverSeqNum = buf.hd.seqNum;
+        
+        if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+            std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
+            return false;
+        }
+
+        // send ACK to server
+        buf.hd.flags = (1 << 15); // set ACKbit = 1
+        buf.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
+        buf.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
+        buf.hd.reserved = 0;
+        memset(buf.data, '\0', sizeof(buf.data));
+
+        if(sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+            std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
+            return false;
+        }
+
+        std::cout << "successfully closed connection" << std::endl;
+        return true;
+    }
+    
+    return false;
 }
 
 int main(int argc, char *argv[]){
@@ -94,13 +144,15 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
-	printf("sending: %s\n", buf.data); 
-
 	sin_size = sizeof(struct sockaddr_in);
 	
 	bool connected = initConnection(sockfd, buf, server_addr, sin_size);
 	if(connected) {
 		ackAndTransit(sockfd, buf, server_addr, sin_size, argv[3]);
+        
+        if(!closeConnection(sockfd, buf, server_addr, sin_size)) {
+            std::cerr << "ERROR: close connection" << std::endl;
+        }
 	} else {
 		std::cerr << "ERROR: init connection" << std::endl;
 	}
