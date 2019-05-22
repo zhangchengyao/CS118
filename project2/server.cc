@@ -28,6 +28,7 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
         std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
     }
+    printPacketInfo(serverPkt, true);
 
     printf("send SYNACK packet to: %s\n", inet_ntoa(their_addr.sin_addr));
 
@@ -37,6 +38,8 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
         return false;
     }
     printf("receive ACK packet from: %s\n", inet_ntoa(their_addr.sin_addr));
+    printPacketInfo(clientPkt, false);
+    
     if(clientPkt.hd.ackNum == serverPkt.hd.seqNum + 1) {
         return true;
     } else {
@@ -59,6 +62,7 @@ bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: send ACK packet" << std::endl;
         return false;
     }
+    printPacketInfo(serverPkt, true);
 
     std::cout << "send ACK packet to: " << inet_ntoa(their_addr.sin_addr) << std::endl;
 
@@ -73,6 +77,7 @@ bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: send FIN packet" << std::endl;
         return false;
     }
+    printPacketInfo(serverPkt, true);
 
     std::cout << "send FIN packet to: " << inet_ntoa(their_addr.sin_addr) << std::endl;
 
@@ -81,6 +86,7 @@ bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: receive ACK from client" << std::endl;
         return false;
     }
+    printPacketInfo(clientPkt, false);
 
     connectionOrder++;
     return true;
@@ -135,11 +141,12 @@ int main(int argc, char *argv[]) {
             std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
         }
+        printPacketInfo(buf, false);
 
-        if((buf.hd.flags >> 14) & 1) { // SYNbit = 1
+        if(isSYN(buf.hd.flags)) { // SYNbit = 1
             printf("receive connection from %s:\n", inet_ntoa(their_addr.sin_addr));
             connected = handleConnection(buf, server_sockfd, their_addr, sin_size);
-        } else if((buf.hd.flags >> 13) & 1) { // FINbit = 1
+        } else if(isFIN(buf.hd.flags)) { // FINbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
             std::cout << "FIN ... " << std::endl;
             if(!closeConnection(buf, server_sockfd, their_addr, sin_size)) {

@@ -30,11 +30,13 @@ bool initConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned 
         std::cerr << "ERROR: initConnection sendto" << std::endl;
 		return false;
 	} else {
+        printPacketInfo(buf, true);
 		// receive the SYNACK packet from the server
 		if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
 			std::cerr << "ERROR: initConnection recvfrom" << std::endl;
 			return false;
 		}
+        printPacketInfo(buf, false);
 		// check whether the infomation is right
 		if(buf.hd.flags == ((1 << 15) | (1 << 14)) && buf.hd.ackNum == curSeqNum + 1) {
 			return true;
@@ -67,6 +69,7 @@ void ackAndTransit(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned i
 	if(sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
         std::cerr << "ERROR: ack SYNACK sendto" << std::endl;
 	}
+    printPacketInfo(buf, true);
 	// TODO send large files
 }
 
@@ -83,12 +86,14 @@ bool closeConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned
         std::cerr << "ERROR: closeConnection FIN sendto" << std::endl;
         return false;
     }
+    printPacketInfo(buf, true);
 
     // receive the ACK packet from the server
     if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
         std::cerr << "ERROR: closeConnection ACK recvfrom" << std::endl;
         return false;
     }
+    printPacketInfo(buf, false);
 
     if(buf.hd.flags == (1 << 15) && buf.hd.ackNum == (curSeqNum + 1) % MAX_SEQ_NUM) {
         // wait for 2 seconds...
@@ -99,6 +104,7 @@ bool closeConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned
             std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
             return false;
         }
+        printPacketInfo(buf, false);
 
         // send ACK to server
         buf.hd.flags = (1 << 15); // set ACKbit = 1
@@ -111,6 +117,7 @@ bool closeConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned
             std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
             return false;
         }
+        printPacketInfo(buf, true);
 
         std::cout << "successfully closed connection" << std::endl;
         return true;
