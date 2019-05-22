@@ -8,6 +8,7 @@
 #include <fstream>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ctime>
 
 #include "rdt_header.h"
 
@@ -21,6 +22,7 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
     // choose init seq num, send SYNACK msg, acking SYN from client
     buffer serverPkt;
     serverPkt.hd.flags |= ((1 << 15) | (1 << 14)); // set ACKbit = 1 and SYNbit = 1
+    srand(1);
     serverPkt.hd.seqNum = rand() % (MAX_SEQ_NUM + 1);
     serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
@@ -50,8 +52,9 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
 
 bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
     buffer serverPkt;
-    bzero(&serverPkt, sizeof(serverPkt));
+    memset(serverPkt.data, '\0', sizeof(serverPkt.data));
 
+    srand(1);
     uint32_t seqNum = rand() % (MAX_SEQ_NUM + 1);
 
     serverPkt.hd.flags |= (1 << 15); // set ACKbit = 1

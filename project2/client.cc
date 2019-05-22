@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <iostream>
 #include <fstream>
+#include <ctime>
 
 #include "rdt_header.h"
 
@@ -18,6 +19,7 @@
 bool initConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned int& sin_size) {
 	// initiate connection to the server
 	// make the packet
+    srand(2);
 	uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
 	buf.hd.flags = (1 << 14); // set SYNbit = 1
 	buf.hd.seqNum = curSeqNum;
@@ -75,6 +77,7 @@ void ackAndTransit(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned i
 
 bool closeConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned int& sin_size) {
     // send FIN to server
+    srand(2);
     uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
 	buf.hd.flags = (1 << 13); // set FINbit = 1
 	buf.hd.seqNum = curSeqNum;
