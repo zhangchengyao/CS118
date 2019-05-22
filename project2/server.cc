@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctime>
+#include <csignal>
 
 #include "rdt_header.h"
 
@@ -95,6 +96,10 @@ bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_ad
     return true;
 }
 
+void signalHandler(int signal) {
+    std::cout << "interrupted: " << signal << std::endl;
+    exit(0);
+}
 
 int main(int argc, char *argv[]) {
     if(argc != 2) {
@@ -102,7 +107,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int portnum = std::atoi(argv[1]);
+    signal(SIGQUIT, signalHandler);
+    signal(SIGTERM, signalHandler);
+
+    int portnum = atoi(argv[1]);
+    if(portnum < 1024 || portnum > 65535) {
+        std::cerr << "ERROR: incorrect port number" << std::endl;
+        exit(1);
+    }
 
     int server_sockfd;
 

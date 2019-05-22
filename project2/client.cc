@@ -136,7 +136,15 @@ int main(int argc, char *argv[]){
 	}
 
 	hostent* host = gethostbyname(argv[1]);
+	if(host == NULL) {
+		std::cerr << "ERROR: Incorrect hostname" << std::endl;
+		exit(1);
+	}
 	int portnum = atoi(argv[2]);
+	if(portnum < 1024 || portnum > 65535) {
+		std::cerr << "ERROR: Incorrect portnum" << std::endl;
+		exit(1);
+	}
 
 	buffer buf;
 	
