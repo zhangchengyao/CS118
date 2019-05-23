@@ -72,6 +72,12 @@ void ackAndTransit(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned i
         std::cerr << "ERROR: ack SYNACK sendto" << std::endl;
 	}
     printPacketInfo(buf, true);
+
+	// receive the last ACK from server
+	if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+		std::cerr << "ERROR: ackAndTransit recvfrom" << std::endl;
+		return;
+	}
 	// TODO send large files
 }
 

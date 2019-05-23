@@ -51,7 +51,7 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
     }
 }
 
-bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
+bool closeConnection(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
     buffer serverPkt;
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
 
@@ -99,6 +99,25 @@ bool closeConnection(buffer &clientPkt, int server_sockfd, sockaddr_in &their_ad
 void signalHandler(int signal) {
     std::cout << "interrupted: " << signal << std::endl;
     exit(0);
+}
+
+void receiveData(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
+    buffer serverPkt;
+    uint32_t expectedSeqNum = clientPkt.hd.seqNum + strlen(clientPkt.data);
+    
+    // ACK the ACK packet from client at the last of 3-way handshake
+    serverPkt.hd.flags |= (1 << 15); // set ACKbit = 1
+    serverPkt.hd.ackNum = expectedSeqNum;
+    if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
+        std::cerr << "ERROR: send ACK packet in receiveData" << std::endl;
+        return;
+    }
+    printPacketInfo(serverPkt, true);
+
+    // receive the data in client's ACK packet in connection establishment if any
+    std::string filename = std::to_string(connectionOrder) + ".file";
+    std::ofstream os(filename, std::ios::out | std::ios::binary);
+    os << clientPkt.data;
 }
 
 int main(int argc, char *argv[]) {
@@ -172,6 +191,7 @@ int main(int argc, char *argv[]) {
 
         if(connected) {
             printf("establish connection with %s:\n", inet_ntoa(their_addr.sin_addr));
+            receiveData(buf, server_sockfd, their_addr, sin_size);
             // TODO receive the file
         } else {
             printf("received packet from: %s and dropped\n", inet_ntoa(their_addr.sin_addr));
