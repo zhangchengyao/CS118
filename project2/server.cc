@@ -18,6 +18,7 @@
 #define MAX_SEQ_NUM 25600
 
 int connectionOrder = 1;
+bool connected = false;
 
 bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
     // choose init seq num, send SYNACK msg, acking SYN from client
@@ -93,11 +94,22 @@ bool closeConnection(buffer& clientPkt, int server_sockfd, sockaddr_in &their_ad
     printPacketInfo(clientPkt, false);
 
     connectionOrder++;
+    connected = false;
     return true;
 }
 
 void signalHandler(int signal) {
     std::cout << "interrupted: " << signal << std::endl;
+    if(connected) {
+        std::string filename = std::to_string(connectionOrder) + ".file";
+        std::ifstream is(filename, std::ios::in | std::ios::binary);
+        if(is) {        // the client already sends some data
+            is.close();
+            std::ofstream os(filename, std::ios::out | std::ios::binary);
+            os << "INTERRUPT";
+            os.close();
+        }
+    }
     exit(0);
 }
 
@@ -115,9 +127,12 @@ void receiveData(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
     printPacketInfo(serverPkt, true);
 
     // receive the data in client's ACK packet in connection establishment if any
-    std::string filename = std::to_string(connectionOrder) + ".file";
-    std::ofstream os(filename, std::ios::out | std::ios::binary);
-    os << clientPkt.data;
+    if(strlen(clientPkt.data) > 0) {
+        std::string filename = std::to_string(connectionOrder) + ".file";
+        std::ofstream os(filename, std::ios::out | std::ios::binary);
+        os << clientPkt.data;
+        os.close();
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -128,6 +143,7 @@ int main(int argc, char *argv[]) {
 
     signal(SIGQUIT, signalHandler);
     signal(SIGTERM, signalHandler);
+    signal(SIGINT, signalHandler);
 
     int portnum = atoi(argv[1]);
     if(portnum < 1024 || portnum > 65535) {
@@ -170,7 +186,6 @@ int main(int argc, char *argv[]) {
     printf("waiting for a packet...\n");
 
     while(1) {
-        bool connected = false;
         if((len = recvfrom(server_sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0) {
             std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
@@ -178,7 +193,7 @@ int main(int argc, char *argv[]) {
         printPacketInfo(buf, false);
 
         if(isSYN(buf.hd.flags)) { // SYNbit = 1
-            printf("receive connection from %s:\n", inet_ntoa(their_addr.sin_addr));
+            std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
             connected = handleConnection(buf, server_sockfd, their_addr, sin_size);
         } else if(isFIN(buf.hd.flags)) { // FINbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
