@@ -66,9 +66,9 @@ void ackAndTransit(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned i
         std::cerr << "ERROR: open file" << std::endl;
 		return;
 	}
-	char filepkt[MAX_BUF_SIZE];
-	is.read(filepkt, sizeof(filepkt));
-	strcpy(pkt.data, filepkt);
+	char filebuf[MAX_BUF_SIZE];
+	is.read(filebuf, sizeof(filebuf));
+	strcpy(pkt.data, filebuf);
 
     std::cout << "sending: " << pkt.data << std::endl;
 	// send the ack packet with data to the server
@@ -80,9 +80,9 @@ void ackAndTransit(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned i
 	curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
 
 	// send large files
-	while(is.read(filepkt, sizeof(filepkt)).gcount() > 0) {
+	while(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
 		if(is.gcount() < MAX_BUF_SIZE) {
-			filepkt[is.gcount()] = '\0';
+			filebuf[is.gcount()] = '\0';
 		}
 		recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
 		while(pkt.hd.ackNum != curSeqNum) {
@@ -94,7 +94,7 @@ void ackAndTransit(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned i
 		pkt.hd.ackNum = 0;
 		pkt.hd.reserved = 0;
 		pkt.hd.seqNum = curSeqNum;
-		strcpy(pkt.data, filepkt);
+		strcpy(pkt.data, filebuf);
 		std::cout << "sending: " << pkt.data << std::endl;
 		sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
 		curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);

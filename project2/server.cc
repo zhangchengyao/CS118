@@ -145,7 +145,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
             dataBytes = strlen(buffer.front().data) < MAX_BUF_SIZE ? strlen(buffer.front().data) : MAX_BUF_SIZE;
 
             if(dataBytes > 0) {
-                 std::cout << dataBytes << std::endl;
+                std::cout << dataBytes << std::endl;
                 std::string filename = std::to_string(connectionOrder) + ".file";
                 std::ofstream os(filename, std::ios::out | std::ios::binary | std::ios::app);
                 os << buffer.front().data;
