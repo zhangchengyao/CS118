@@ -21,7 +21,7 @@ struct header {
     header() : seqNum(0), ackNum(0), flags(0), reserved(0) {}
 };
 
-struct buffer {
+struct packet {
     header hd;
     char data[MAX_DATA_SIZE];
 };
@@ -36,30 +36,30 @@ inline bool isFIN(uint16_t flags) {
     return (flags >> 13) & 1;
 }
 
-void printPacketInfo(const buffer &buf, int cwnd, int ssthresh, bool isSent) {
+void printPacketInfo(const packet &pkt, int cwnd, int ssthresh, bool isSent) {
     if(isSent) {
         std::cout << "SEND ";
     } else {
         std::cout << "RECV ";
     }
 
-    std::cout << buf.hd.seqNum << " "
-                << buf.hd.ackNum << " "
+    std::cout << pkt.hd.seqNum << " "
+                << pkt.hd.ackNum << " "
                 << "<cwnd> "
                 << "<ssthresh> ";
 
-    if(isACK(buf.hd.flags)) {
+    if(isACK(pkt.hd.flags)) {
         // ACK
         std::cout << "ACK";
-        if(isSYN(buf.hd.flags)) {
+        if(isSYN(pkt.hd.flags)) {
             std::cout << " SYN";
-        } else if(isFIN(buf.hd.flags)) {
+        } else if(isFIN(pkt.hd.flags)) {
             std::cout << " FIN";
         }
-    } else if(isSYN(buf.hd.flags)) {
+    } else if(isSYN(pkt.hd.flags)) {
         // SYN
         std::cout << "SYN";
-    } else if(isFIN(buf.hd.flags)) {
+    } else if(isFIN(pkt.hd.flags)) {
         // FIN
         std::cout << "FIN";
     }

@@ -22,9 +22,9 @@ int connectionOrder = 1;
 bool connected = false;
 uint32_t expectedSeqNum;
 
-bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
+bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
     // choose init seq num, send SYNACK msg, acking SYN from client
-    buffer serverPkt;
+    packet serverPkt;
     serverPkt.hd.flags = ((1 << 15) | (1 << 14)); // set ACKbit = 1 and SYNbit = 1
     srand(1);
     serverPkt.hd.seqNum = rand() % (MAX_SEQ_NUM + 1);
@@ -55,8 +55,8 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
     }
 }
 
-bool closeConnection(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
-    buffer serverPkt;
+bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
+    packet serverPkt;
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
 
     srand(1);
@@ -85,7 +85,7 @@ bool closeConnection(buffer& clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: send FIN packet" << std::endl;
         return false;
     }
-    printPacketInfo(serverPkt, true);
+    printPacketInfo(serverPkt, 0, 0, true);
 
     std::cout << "send FIN packet to: " << inet_ntoa(their_addr.sin_addr) << std::endl;
 
@@ -116,8 +116,8 @@ void signalHandler(int signal) {
     exit(0);
 }
 
-void receiveData(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
-    buffer serverPkt;
+void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
+    packet serverPkt;
 
     // ACK the packet from client
     serverPkt.hd.flags = (1 << 15); // set ACKbit = 1
@@ -137,7 +137,7 @@ void receiveData(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
         }
     } else {
         serverPkt.hd.ackNum = expectedSeqNum;
-        // TODO buffer the data
+        // TODO packet the data
     }
     
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
 
     unsigned int sin_size;
     int len;
-    buffer buf;
+    packet pkt;
 
     /* create a socket */
     if((server_sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -199,19 +199,19 @@ int main(int argc, char *argv[]) {
     printf("waiting for a packet...\n");
 
     while(1) {
-        if((len = recvfrom(server_sockfd, &buf, sizeof(buf), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0) {
+        if((len = recvfrom(server_sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *) &their_addr, &sin_size)) < 0) {
             std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
         }
-        printPacketInfo(buf, 0, 0, false);
+        printPacketInfo(pkt, 0, 0, false);
 
-        if(isSYN(buf.hd.flags)) { // SYNbit = 1
+        if(isSYN(pkt.hd.flags)) { // SYNbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
-            connected = handleConnection(buf, server_sockfd, their_addr, sin_size);
-        } else if(isFIN(buf.hd.flags)) { // FINbit = 1
+            connected = handleConnection(pkt, server_sockfd, their_addr, sin_size);
+        } else if(isFIN(pkt.hd.flags)) { // FINbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
             std::cout << "FIN ... " << std::endl;
-            if(!closeConnection(buf, server_sockfd, their_addr, sin_size)) {
+            if(!closeConnection(pkt, server_sockfd, their_addr, sin_size)) {
                 std::cerr << "ERROR: close connection" << std::endl;
             }
             continue;
@@ -219,12 +219,12 @@ int main(int argc, char *argv[]) {
 
         if(connected) {
             printf("establish connection with %s:\n", inet_ntoa(their_addr.sin_addr));
-            receiveData(buf, server_sockfd, their_addr, sin_size);
+            receiveData(pkt, server_sockfd, their_addr, sin_size);
             // TODO receive the file
         } else {
             printf("received packet from: %s and dropped\n", inet_ntoa(their_addr.sin_addr));
-            buf.data[len - HEADER_SIZE] = '\0';
-            printf("contents: %s\n", buf.data);
+            pkt.data[len - HEADER_SIZE] = '\0';
+            printf("contents: %s\n", pkt.data);
         }
         
     }
