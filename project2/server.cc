@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include <ctime>
 #include <csignal>
-#include <vector>
+#include <list>
 
 #include "rdt_header.h"
 
@@ -23,7 +23,7 @@ int connectionOrder = 1;
 bool connected = false;
 uint32_t expectedSeqNum;
 
-std::vector<packet> buffer;
+std::list<packet> buffer;
 
 bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
     // choose init seq num, send SYNACK msg, acking SYN from client
@@ -152,7 +152,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
                 os.close();
             }
             expectedSeqNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
-            buffer.erase(buffer.begin(), buffer.begin() + 1);
+            buffer.erase(buffer.begin());
         }
     } else {
         serverPkt.hd.ackNum = expectedSeqNum;
