@@ -36,7 +36,7 @@ inline bool isFIN(uint16_t flags) {
     return (flags >> 13) & 1;
 }
 
-void printPacketInfo(const buffer &buf, bool isSent) {
+void printPacketInfo(const buffer &buf, int cwnd, int ssthresh, bool isSent) {
     if(isSent) {
         std::cout << "SEND ";
     } else {

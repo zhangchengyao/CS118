@@ -35,7 +35,7 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
         std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
     }
-    printPacketInfo(serverPkt, true);
+    printPacketInfo(serverPkt, 0, 0, true);
 
     printf("send SYNACK packet to: %s\n", inet_ntoa(their_addr.sin_addr));
 
@@ -45,7 +45,7 @@ bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_a
         return false;
     }
     printf("receive ACK packet from: %s\n", inet_ntoa(their_addr.sin_addr));
-    printPacketInfo(clientPkt, false);
+    printPacketInfo(clientPkt, 0, 0, false);
     
     if(clientPkt.hd.ackNum == serverPkt.hd.seqNum + 1) {
         return true;
@@ -70,7 +70,7 @@ bool closeConnection(buffer& clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: send ACK packet" << std::endl;
         return false;
     }
-    printPacketInfo(serverPkt, true);
+    printPacketInfo(serverPkt, 0, 0, true);
 
     std::cout << "send ACK packet to: " << inet_ntoa(their_addr.sin_addr) << std::endl;
 
@@ -94,7 +94,7 @@ bool closeConnection(buffer& clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: receive ACK from client" << std::endl;
         return false;
     }
-    printPacketInfo(clientPkt, false);
+    printPacketInfo(clientPkt, 0, 0, false);
 
     connectionOrder++;
     connected = false;
@@ -144,7 +144,7 @@ void receiveData(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
         std::cerr << "ERROR: send ACK packet in receiveData" << std::endl;
         return;
     }
-    printPacketInfo(serverPkt, true);
+    printPacketInfo(serverPkt, 0, 0, true);
 
 }
 
@@ -203,7 +203,7 @@ int main(int argc, char *argv[]) {
             std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
         }
-        printPacketInfo(buf, false);
+        printPacketInfo(buf, 0, 0, false);
 
         if(isSYN(buf.hd.flags)) { // SYNbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
