@@ -16,18 +16,21 @@
 #define HEADER_SIZE 12
 #define BACKLOG 1 /* pending connections queue size */
 #define MAX_SEQ_NUM 25600
+#define MAX_BUF_SIZE 512
 
 int connectionOrder = 1;
 bool connected = false;
+uint32_t expectedSeqNum;
 
 bool handleConnection(buffer& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
     // choose init seq num, send SYNACK msg, acking SYN from client
     buffer serverPkt;
-    serverPkt.hd.flags |= ((1 << 15) | (1 << 14)); // set ACKbit = 1 and SYNbit = 1
+    serverPkt.hd.flags = ((1 << 15) | (1 << 14)); // set ACKbit = 1 and SYNbit = 1
     srand(1);
     serverPkt.hd.seqNum = rand() % (MAX_SEQ_NUM + 1);
-    serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
+    serverPkt.hd.ackNum = (clientPkt.hd.seqNum + 1) % (MAX_SEQ_NUM + 1);
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
+    expectedSeqNum = serverPkt.hd.ackNum;
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
         std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
@@ -115,24 +118,34 @@ void signalHandler(int signal) {
 
 void receiveData(buffer& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
     buffer serverPkt;
-    uint32_t expectedSeqNum = clientPkt.hd.seqNum + strlen(clientPkt.data);
+
+    // ACK the packet from client
+    serverPkt.hd.flags = (1 << 15); // set ACKbit = 1
+    memset(serverPkt.data, '\0', sizeof(serverPkt.data));
+    if(clientPkt.hd.seqNum == expectedSeqNum) {
+        int dataBytes = strlen(clientPkt.data) < MAX_BUF_SIZE ? strlen(clientPkt.data) : MAX_BUF_SIZE;
+        serverPkt.hd.ackNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+        expectedSeqNum = serverPkt.hd.ackNum;
+
+        // receive the data in client's packet
+        if(dataBytes > 0) {
+            std::cout << dataBytes << std::endl;
+            std::string filename = std::to_string(connectionOrder) + ".file";
+            std::ofstream os(filename, std::ios::out | std::ios::binary | std::ios::app);
+            os << clientPkt.data;
+            os.close();
+        }
+    } else {
+        serverPkt.hd.ackNum = expectedSeqNum;
+        // TODO buffer the data
+    }
     
-    // ACK the ACK packet from client at the last of 3-way handshake
-    serverPkt.hd.flags |= (1 << 15); // set ACKbit = 1
-    serverPkt.hd.ackNum = expectedSeqNum;
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
         std::cerr << "ERROR: send ACK packet in receiveData" << std::endl;
         return;
     }
     printPacketInfo(serverPkt, true);
 
-    // receive the data in client's ACK packet in connection establishment if any
-    if(strlen(clientPkt.data) > 0) {
-        std::string filename = std::to_string(connectionOrder) + ".file";
-        std::ofstream os(filename, std::ios::out | std::ios::binary);
-        os << clientPkt.data;
-        os.close();
-    }
 }
 
 int main(int argc, char *argv[]) {

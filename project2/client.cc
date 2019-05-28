@@ -72,13 +72,36 @@ void ackAndTransit(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned i
         std::cerr << "ERROR: ack SYNACK sendto" << std::endl;
 	}
     printPacketInfo(buf, true);
+	int dataBytes = strlen(buf.data) < MAX_BUF_SIZE ? strlen(buf.data) : MAX_BUF_SIZE;
+	curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+
+	// send large files
+	while(is.read(fileBuf, sizeof(fileBuf)).gcount() > 0) {
+		if(is.gcount() < MAX_BUF_SIZE) {
+			fileBuf[is.gcount()] = '\0';
+		}
+		recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size);
+		while(buf.hd.ackNum != curSeqNum) {
+			// TODO packet loss
+			std::cout << "duplicate ack!" << std::endl;
+			recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size);
+		}
+		buf.hd.flags = 0;
+		buf.hd.ackNum = 0;
+		buf.hd.reserved = 0;
+		buf.hd.seqNum = curSeqNum;
+		strcpy(buf.data, fileBuf);
+		std::cout << "sending: " << buf.data << std::endl;
+		sendto(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
+		curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+	}
+	is.close();
 
 	// receive the last ACK from server
 	if(recvfrom(sockfd, &buf, sizeof(buf), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
 		std::cerr << "ERROR: ackAndTransit recvfrom" << std::endl;
 		return;
 	}
-	// TODO send large files
 }
 
 bool closeConnection(int sockfd, buffer& buf, sockaddr_in& server_addr, unsigned int& sin_size) {
