@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <ctime>
 #include <csignal>
+#include <vector>
 
 #include "rdt_header.h"
 
@@ -21,6 +22,8 @@
 int connectionOrder = 1;
 bool connected = false;
 uint32_t expectedSeqNum;
+
+std::vector<packet> buffer;
 
 bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_addr, unsigned int sin_size) {
     // choose init seq num, send SYNACK msg, acking SYN from client
@@ -98,6 +101,7 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
 
     connectionOrder++;
     connected = false;
+    buffer.clear();
     return true;
 }
 
@@ -135,9 +139,24 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
             os << clientPkt.data;
             os.close();
         }
+
+        // check whether packets in buffer should be written to the file
+        while(!buffer.empty() && buffer.front().hd.seqNum == expectedSeqNum) {
+            dataBytes = strlen(buffer.front().data) < MAX_BUF_SIZE ? strlen(buffer.front().data) : MAX_BUF_SIZE;
+
+            if(dataBytes > 0) {
+                 std::cout << dataBytes << std::endl;
+                std::string filename = std::to_string(connectionOrder) + ".file";
+                std::ofstream os(filename, std::ios::out | std::ios::binary | std::ios::app);
+                os << buffer.front().data;
+                os.close();
+            }
+            expectedSeqNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+            buffer.erase(buffer.begin(), buffer.begin() + 1);
+        }
     } else {
         serverPkt.hd.ackNum = expectedSeqNum;
-        // TODO packet the data
+        buffer.push_back(clientPkt);
     }
     
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
