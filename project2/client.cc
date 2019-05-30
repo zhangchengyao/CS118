@@ -9,6 +9,8 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <thread>
+#include <time.h>
 
 #include "rdt_header.h"
 
@@ -131,31 +133,83 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
     }
     printPacketInfo(pkt, cwnd, ssthresh, false);
 
-    if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == (curSeqNum + 1) % MAX_SEQ_NUM) {
+    if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == (curSeqNum + 1) % (MAX_SEQ_NUM + 1)) {
         // wait for 2 seconds...
 
         uint32_t serverSeqNum = pkt.hd.seqNum;
+
+		clock_t start = clock();
+
+		fd_set active_fd_set;
+		struct timeval timeout;
+		FD_ZERO(&active_fd_set);
+		FD_SET(sockfd, &active_fd_set);
+
+		clock_t cur;
+		double time_elapse = 0.0;
+		do{
+			double time_remaining = 2 - time_elapse;
+			timeout.tv_sec = (int)time_remaining;
+    		timeout.tv_usec = (time_remaining - timeout.tv_sec) * 1000000;
+
+			int ret = select(sockfd + 1, &active_fd_set, NULL, NULL, &timeout); 
+
+			if(ret < 0) {
+				std::cerr << "ERROR: closeConnection sock select" << std::endl;
+            	return false;
+			} else if(ret == 0) {
+				// timeout
+				break;
+			} else {
+				// server sends FIN to the client
+				if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+					std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
+					return false;
+				}
+				printPacketInfo(pkt, cwnd, ssthresh, false);
+
+				// todo check whether incoming packet is FIN
+
+				// send ACK to server
+				pkt.hd.flags = (1 << 15); // set ACKbit = 1
+				pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
+				pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
+				pkt.hd.reserved = 0;
+				memset(pkt.data, '\0', sizeof(pkt.data));
+
+				if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+					std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
+					return false;
+				}
+				printPacketInfo(pkt, cwnd, ssthresh, true);
+
+				std::cout << "successfully closed connection" << std::endl;
+			}
+
+			cur = clock();
+			time_elapse = (double)(cur - start) / CLOCKS_PER_SEC;
+		} while(time_elapse < 2.0);
         
-        if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
-            std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
-            return false;
-        }
-        printPacketInfo(pkt, cwnd, ssthresh, false);
+        // if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+        //     std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
+        //     return false;
+        // }
+        // printPacketInfo(pkt, cwnd, ssthresh, false);
 
-        // send ACK to server
-        pkt.hd.flags = (1 << 15); // set ACKbit = 1
-        pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
-        pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
-        pkt.hd.reserved = 0;
-        memset(pkt.data, '\0', sizeof(pkt.data));
+        // // send ACK to server
+        // pkt.hd.flags = (1 << 15); // set ACKbit = 1
+        // pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
+        // pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
+        // pkt.hd.reserved = 0;
+        // memset(pkt.data, '\0', sizeof(pkt.data));
 
-        if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
-            std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
-            return false;
-        }
-        printPacketInfo(pkt, cwnd, ssthresh, true);
+        // if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+        //     std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
+        //     return false;
+        // }
+        // printPacketInfo(pkt, cwnd, ssthresh, true);
 
-        std::cout << "successfully closed connection" << std::endl;
+        // std::cout << "successfully closed connection" << std::endl;
         return true;
     }
     
