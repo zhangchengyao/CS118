@@ -127,7 +127,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
     serverPkt.hd.flags = (1 << 15); // set ACKbit = 1
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
     if(clientPkt.hd.seqNum == expectedSeqNum) {
-        int dataBytes = strlen(clientPkt.data) < MAX_BUF_SIZE ? strlen(clientPkt.data) : MAX_BUF_SIZE;
+        int dataBytes = clientPkt.hd.dataSize;
         serverPkt.hd.ackNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
         expectedSeqNum = serverPkt.hd.ackNum;
 
@@ -136,19 +136,20 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
             std::cout << dataBytes << std::endl;
             std::string filename = std::to_string(connectionOrder) + ".file";
             std::ofstream os(filename, std::ios::out | std::ios::binary | std::ios::app);
-            os << clientPkt.data;
+            os.write(clientPkt.data, dataBytes);
+            std::cout << clientPkt.data << std::endl;
             os.close();
         }
 
         // check whether packets in buffer should be written to the file
         while(!buffer.empty() && buffer.front().hd.seqNum == expectedSeqNum) {
-            dataBytes = strlen(buffer.front().data) < MAX_BUF_SIZE ? strlen(buffer.front().data) : MAX_BUF_SIZE;
+            dataBytes = buffer.front().hd.dataSize;;
 
             if(dataBytes > 0) {
                 std::cout << dataBytes << std::endl;
                 std::string filename = std::to_string(connectionOrder) + ".file";
                 std::ofstream os(filename, std::ios::out | std::ios::binary | std::ios::app);
-                os << buffer.front().data;
+                os.write(buffer.front().data, dataBytes);
                 os.close();
             }
             expectedSeqNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);

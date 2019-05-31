@@ -10,15 +10,15 @@
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //   |                      Acknowledge Number                       |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |A|S|F|                       |          Reserved               |
+//   |A|S|F|                       |          Data size              |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 struct header {
     uint32_t seqNum;
     uint32_t ackNum;
     uint16_t flags;
-    uint16_t reserved;
-    header() : seqNum(0), ackNum(0), flags(0), reserved(0) {}
+    uint16_t dataSize;
+    header() : seqNum(0), ackNum(0), flags(0), dataSize(0) {}
 };
 
 struct packet {
