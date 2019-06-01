@@ -169,6 +169,17 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
 
 }
 
+int wait10Sec(int sockfd) {
+    fd_set active_fd_set;
+    struct timeval timeout;
+    FD_ZERO(&active_fd_set);
+    FD_SET(sockfd, &active_fd_set);
+
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    return select(sockfd + 1, &active_fd_set, NULL, NULL, &timeout);
+}
+
 int main(int argc, char *argv[]) {
     if(argc != 2) {
         std::cerr << "ERROR: Usage: ./server <portnum>" << std::endl;
@@ -232,14 +243,7 @@ int main(int argc, char *argv[]) {
             if(connected) {
                 // wait for 10 seconds, if no data, close connection, else begin to
                 // receive data
-                fd_set active_fd_set;
-                struct timeval timeout;
-                FD_ZERO(&active_fd_set);
-                FD_SET(server_sockfd, &active_fd_set);
-
-                timeout.tv_sec = 10;
-                timeout.tv_usec = 0;
-                int ret = select(server_sockfd + 1, &active_fd_set, NULL, NULL, &timeout);
+                int ret = wait10Sec(server_sockfd);    
                 if(ret < 0) {
                     std::cerr << "ERROR: establish connection sock select\n";
                     exit(1);
@@ -248,7 +252,7 @@ int main(int argc, char *argv[]) {
                     std::ofstream os(filename, std::ios::out | std::ios::binary);
                     os.close();
                     connected = false; // close the connection
-                    std::cout << "Receive no data from client, save empty file...\n\n";
+                    std::cout << "Receive no data from client, save empty file and close connection...\n\n";
                     std::cout << "waiting for a packet...\n\n";
                     continue;
                 } else {
@@ -266,7 +270,15 @@ int main(int argc, char *argv[]) {
 
         if(connected) {
             receiveData(pkt, server_sockfd, their_addr, sin_size);
-            // TODO receive the file
+            int ret = wait10Sec(server_sockfd);
+            if(ret < 0) {
+                std::cerr << "ERROR: establish connection sock select\n";
+                exit(1);
+            } else if(ret == 0) { // timeout
+                connected = false;
+                std::cout << "Receive no more data from client, close connection...\n\n";
+                std::cout << "waiting for a packet...\n\n";
+            }
         } else {
             printf("received packet from: %s and dropped\n", inet_ntoa(their_addr.sin_addr));
             pkt.data[len - HEADER_SIZE] = '\0';
