@@ -22,6 +22,17 @@
 int cwnd = 512;
 int ssthresh = 5120;
 
+int wait10Sec(int sockfd) {
+    fd_set active_fd_set;
+    struct timeval timeout;
+    FD_ZERO(&active_fd_set);
+    FD_SET(sockfd, &active_fd_set);
+
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    return select(sockfd + 1, &active_fd_set, NULL, NULL, &timeout);
+}
+
 bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size) {
 	// initiate connection to the server
 	// make the packet
@@ -39,6 +50,17 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 	} else {
         printPacketInfo(pkt, cwnd, ssthresh, true);
 		// receive the SYNACK packet from the server
+
+		int ret = wait10Sec(sockfd);
+		if(ret < 0) {
+			std::cerr << "ERROR: initConnection sock select\n";
+			exit(1);
+		} else if(ret == 0) { // timeout
+			std::cout << "Receive no packet from client, close connection...\n\n";
+			close(sockfd);
+			exit(1);
+		}
+
 		if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
 			std::cerr << "ERROR: initConnection recvfrom" << std::endl;
 			return false;
@@ -96,6 +118,15 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 			}
 		}
 
+		int ret = wait10Sec(sockfd);
+		if(ret < 0) {
+			std::cerr << "ERROR: transitData sock select\n";
+			exit(1);
+		} else if(ret == 0) { // timeout
+			std::cout << "Receive no more packets from client, close connection...\n\n";
+			close(sockfd);
+			exit(1);
+		}
 		// receive acks for packets in current window
 		for(int i = 0; i < cnt; i++) {
 			recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);

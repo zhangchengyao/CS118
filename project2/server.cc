@@ -272,7 +272,7 @@ int main(int argc, char *argv[]) {
             receiveData(pkt, server_sockfd, their_addr, sin_size);
             int ret = wait10Sec(server_sockfd);
             if(ret < 0) {
-                std::cerr << "ERROR: establish connection sock select\n";
+                std::cerr << "ERROR: receiveData sock select\n";
                 exit(1);
             } else if(ret == 0) { // timeout
                 connected = false;
