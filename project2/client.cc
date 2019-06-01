@@ -86,8 +86,9 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 				pkt.hd.dataSize = is.gcount();
 				pkt.hd.seqNum = curSeqNum;
 				memcpy(pkt.data, filebuf, MAX_BUF_SIZE);
-				std::cout << "*sending: " << pkt.hd.dataSize << "Bytes data" << std::endl;
+				std::cout << "*sending: " << pkt.hd.dataSize << " Bytes data" << std::endl;
 				sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
+				printPacketInfo(pkt, cwnd, ssthresh, true);
 				uint16_t dataBytes = pkt.hd.dataSize;
 				curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
 			} else {
@@ -170,7 +171,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 
 		clock_t cur;
 		double time_elapse = 0.0;
-		do{
+		do {
 			double time_remaining = 2 - time_elapse;
 			timeout.tv_sec = (int)time_remaining;
     		timeout.tv_usec = (time_remaining - timeout.tv_sec) * 1000000;
