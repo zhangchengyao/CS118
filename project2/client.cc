@@ -84,7 +84,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 	}
 }
 
-void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
+void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
 	std::ifstream is(file, std::ios::in | std::ios::binary);
 	if(!is) {
         std::cerr << "ERROR: open file" << std::endl;
@@ -95,7 +95,7 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 	// start to send data
 	uint32_t curSeqNum = pkt.hd.seqNum + 1;
 
-	// transit the file
+	// transmit the file
 	bool eof = false;
 	while(!eof) {
 		int cnt = 0;
@@ -308,7 +308,7 @@ int main(int argc, char *argv[]){
 	
 	bool connected = initConnection(sockfd, pkt, server_addr, sin_size);
 	if(connected) {
-		transitData(sockfd, pkt, server_addr, sin_size, argv[3]);
+		transmitData(sockfd, pkt, server_addr, sin_size, argv[3]);
         
         if(!closeConnection(sockfd, pkt, server_addr, sin_size)) {
             std::cerr << "ERROR: close connection" << std::endl;
