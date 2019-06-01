@@ -230,7 +230,30 @@ int main(int argc, char *argv[]) {
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << "\n\n";
             connected = handleConnection(pkt, server_sockfd, their_addr, sin_size);
             if(connected) {
-                continue;      // begin to receive data
+                // wait for 10 seconds, if no data, close connection, else begin to
+                // receive data
+                fd_set active_fd_set;
+                struct timeval timeout;
+                FD_ZERO(&active_fd_set);
+                FD_SET(server_sockfd, &active_fd_set);
+
+                timeout.tv_sec = 10;
+                timeout.tv_usec = 0;
+                int ret = select(server_sockfd + 1, &active_fd_set, NULL, NULL, &timeout);
+                if(ret < 0) {
+                    std::cerr << "ERROR: establish connection sock select\n";
+                    exit(1);
+                } else if(ret == 0) { // timeout
+                    std::string filename = std::to_string(connectionOrder) + ".file";
+                    std::ofstream os(filename, std::ios::out | std::ios::binary);
+                    os.close();
+                    connected = false; // close the connection
+                    std::cout << "Receive no data from client, save empty file...\n\n";
+                    std::cout << "waiting for a packet...\n\n";
+                    continue;
+                } else {
+                    continue;      // begin to receive data
+                }
             }
         } else if(isFIN(pkt.hd.flags)) { // FINbit = 1
             std::cout << "receive finish connection from: " << inet_ntoa(their_addr.sin_addr) << "\n";
