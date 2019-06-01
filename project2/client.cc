@@ -31,7 +31,6 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 	pkt.hd.seqNum = curSeqNum;
 	pkt.hd.ackNum = 0;
 	pkt.hd.dataSize = 0;
-	memset(pkt.data, '\0', sizeof(pkt.data));
 
 	// send the packet to server
 	if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
@@ -47,43 +46,35 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
         printPacketInfo(pkt, cwnd, ssthresh, false);
 		// check whether the infomation is right
 		if(pkt.hd.flags == ((1 << 15) | (1 << 14)) && pkt.hd.ackNum == curSeqNum + 1) {
+			pkt.hd.flags = (1 << 15); // set ACKbit = 1
+			uint32_t curSeqNum = pkt.hd.ackNum;
+			uint32_t ackNum = pkt.hd.seqNum + 1;
+			pkt.hd.seqNum = curSeqNum;
+			pkt.hd.ackNum = ackNum;
+			// send the last ACK packet in 3 way handshake
+			if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+				std::cerr << "ERROR: initConnection last ack" << std::endl;
+				return false;
+			}
 			return true;
 		}
 		return false;
 	}
 }
 
-void ackAndTransit(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
-	// ack SYNACK from the server
-	pkt.hd.flags = (1 << 15); // set ACKbit = 1
-	uint32_t curSeqNum = pkt.hd.ackNum;
-	uint32_t ackNum = pkt.hd.seqNum + 1;
-	pkt.hd.seqNum = curSeqNum;
-	pkt.hd.ackNum = ackNum;
-
-	// this packet can include data
+void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
 	std::ifstream is(file, std::ios::in | std::ios::binary);
 	if(!is) {
         std::cerr << "ERROR: open file" << std::endl;
 		return;
 	}
 	char filebuf[MAX_BUF_SIZE];
-	is.read(filebuf, sizeof(filebuf));
-	pkt.hd.dataSize = is.gcount();
-	memcpy(pkt.data, filebuf, MAX_BUF_SIZE);
 
-    std::cout << "sending: " << pkt.data << std::endl;
-	// send the ack packet with data to the server
-	if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
-        std::cerr << "ERROR: ack SYNACK sendto" << std::endl;
-	}
-    printPacketInfo(pkt, cwnd, ssthresh, true);
-	int dataBytes = pkt.hd.dataSize;
-	curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+	// start to send data
+	uint32_t curSeqNum = pkt.hd.seqNum + 1;
 
-	// send large files
-	recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
-	cwnd = 2;
+	// transit the file
+	cwnd = 1;
 	bool eof = false;
 	while(!eof) {
 		int cnt = 0;
@@ -95,9 +86,9 @@ void ackAndTransit(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned i
 				pkt.hd.dataSize = is.gcount();
 				pkt.hd.seqNum = curSeqNum;
 				memcpy(pkt.data, filebuf, MAX_BUF_SIZE);
-				std::cout << "*sending: " << pkt.data << std::endl;
+				std::cout << "*sending: " << pkt.hd.dataSize << "Bytes data" << std::endl;
 				sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
-				dataBytes = pkt.hd.dataSize;
+				uint16_t dataBytes = pkt.hd.dataSize;
 				curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
 			} else {
 				break;
@@ -109,7 +100,7 @@ void ackAndTransit(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned i
 			recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
 		}
 
-		if(cnt < cwnd) {
+		if(is.gcount() == 0) {
 			eof = true;
 		}
 	}
@@ -285,7 +276,7 @@ int main(int argc, char *argv[]){
 	
 	bool connected = initConnection(sockfd, pkt, server_addr, sin_size);
 	if(connected) {
-		ackAndTransit(sockfd, pkt, server_addr, sin_size, argv[3]);
+		transitData(sockfd, pkt, server_addr, sin_size, argv[3]);
         
         if(!closeConnection(sockfd, pkt, server_addr, sin_size)) {
             std::cerr << "ERROR: close connection" << std::endl;

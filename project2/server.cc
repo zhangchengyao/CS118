@@ -33,7 +33,6 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     serverPkt.hd.seqNum = rand() % (MAX_SEQ_NUM + 1);
     serverPkt.hd.ackNum = (clientPkt.hd.seqNum + 1) % (MAX_SEQ_NUM + 1);
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
-    expectedSeqNum = serverPkt.hd.ackNum;
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
         std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
@@ -51,6 +50,7 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     printPacketInfo(clientPkt, 0, 0, false);
     
     if(clientPkt.hd.ackNum == serverPkt.hd.seqNum + 1) {
+        expectedSeqNum = clientPkt.hd.seqNum + 1;
         return true;
     } else {
         std::cerr << "ACKnum" << std::endl;
@@ -123,9 +123,8 @@ void signalHandler(int signal) {
 void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, unsigned int sin_size) {
     packet serverPkt;
 
-    // ACK the packet from client
     serverPkt.hd.flags = (1 << 15); // set ACKbit = 1
-    memset(serverPkt.data, '\0', sizeof(serverPkt.data));
+
     if(clientPkt.hd.seqNum == expectedSeqNum) {
         int dataBytes = clientPkt.hd.dataSize;
         serverPkt.hd.ackNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
@@ -228,6 +227,9 @@ int main(int argc, char *argv[]) {
         if(isSYN(pkt.hd.flags)) { // SYNbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
             connected = handleConnection(pkt, server_sockfd, their_addr, sin_size);
+            if(connected) {
+                continue;      // begin to receive data
+            }
         } else if(isFIN(pkt.hd.flags)) { // FINbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << std::endl;
             std::cout << "FIN ... " << std::endl;
