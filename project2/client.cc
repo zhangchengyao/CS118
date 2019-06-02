@@ -12,6 +12,7 @@
 #include <thread>
 #include <time.h>
 #include <list>
+#include <algorithm>
 
 #include "rdt_header.h"
 
@@ -21,6 +22,7 @@
 #define MAX_CWND 10240
 #define INIT_CWND 512
 #define INIT_SSTHRESH 5120
+#define RTO 500 // ms
 
 int wait10Sec(int sockfd) {
     fd_set active_fd_set;
@@ -101,6 +103,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 
 	bool eof = false;
 	std::list<packet> senderBuffer;
+	clock_t timer;
 	while(!eof) {
 		int pktNum = 0;
 		int cwndPkt = cwnd / MAX_BUF_SIZE;
@@ -109,6 +112,9 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 			if(it != senderBuffer.end()) {
 				sendto(sockfd, &(*it), sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
 				printPacketInfo(*it, cwnd, ssthresh, true);
+				if(it == senderBuffer.begin()) {
+					timer = clock();
+				}
 				it++;
 			} else if(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
 				pkt.hd.flags = 0;
@@ -121,6 +127,9 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 				printPacketInfo(pkt, cwnd, ssthresh, true);
 				// buffer the sent packet
 				senderBuffer.push_back(pkt);
+				if(senderBuffer.size() == 1) {
+					timer = clock();
+				}
 				uint16_t dataBytes = pkt.hd.dataSize;
 				curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
 			} else {
@@ -137,19 +146,56 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 			close(sockfd);
 			exit(1);
 		}
+
+		fd_set active_fd_set;
+		struct timeval timeout;
+		FD_ZERO(&active_fd_set);
+		FD_SET(sockfd, &active_fd_set);
+
+		timeout.tv_sec = 0;
+    	timeout.tv_usec = RTO * 1000;
+
 		// receive acks for packets in current window
 		for(int i = 0; i < pktNum; i++) {
-			recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
-			if(pkt.hd.ackNum == (senderBuffer.front().hd.seqNum + senderBuffer.front().hd.dataSize) % (MAX_SEQ_NUM + 1)) {
-				// The packet has been successfully received, remove it from buffer
-				senderBuffer.pop_front();
+			int ret = select(sockfd + 1, &active_fd_set, NULL, NULL, &timeout); 
 
-				// slow start
-				if(cwnd < ssthresh) {
-					cwnd += MAX_BUF_SIZE;
-				}
+			if(ret < 0) {
+				std::cerr << "ERROR: receive ACK packet" << std::endl;
+            	return ;
+			} else if(ret == 0) {
+				// timeout, reset ssthresh and cwnd
+				ssthresh = std::max(cwnd / 2, 1024);
+				cwnd = INIT_CWND;
+				timeout.tv_usec = RTO * 1000;
 			} else {
-				//TODO
+				recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
+				if(pkt.hd.ackNum == (senderBuffer.front().hd.seqNum + senderBuffer.front().hd.dataSize) % (MAX_SEQ_NUM + 1)) {
+					// The packet has been successfully received, remove it from buffer
+					senderBuffer.pop_front();
+					timer = clock();
+					timeout.tv_usec = RTO * 1000;
+			
+					if(cwnd < ssthresh) {
+						// slow start
+						cwnd += MAX_BUF_SIZE;
+					} else {
+						// congestion avoidance
+						cwnd += (MAX_BUF_SIZE * MAX_BUF_SIZE) / cwnd;
+					}
+				} else {
+					// check whether timeout occurs
+					clock_t now = clock();
+					double time_elapse = (double)(now - timer) / CLOCKS_PER_SEC;
+					if(time_elapse < 0.5) {
+						// update timeout value
+						timeout.tv_usec = (0.5 - time_elapse) * 1000000;
+					} else {
+						// reset ssthresh and cwnd
+						ssthresh = std::max(cwnd / 2, 1024);
+						cwnd = INIT_CWND;
+						timeout.tv_usec = RTO * 1000;
+					}
+				}
 			}
 		}
 
