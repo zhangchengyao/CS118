@@ -84,7 +84,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 	}
 }
 
-void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
+void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
 	std::ifstream is(file, std::ios::in | std::ios::binary);
 	if(!is) {
         std::cerr << "ERROR: open file" << std::endl;
@@ -95,9 +95,10 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 	// start to send data
 	uint32_t curSeqNum = pkt.hd.seqNum + 1;
 
-	// transit the file
+	// transmit the file
 	int cwnd = INIT_CWND; // initial congestion window size
 	int ssthresh = INIT_SSTHRESH; // initial slow start threshold
+
 	bool eof = false;
 	std::list<packet> senderBuffer;
 	while(!eof) {
@@ -209,7 +210,8 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
     printPacketInfo(pkt, 0, 0, false);
 
     if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == (curSeqNum + 1) % (MAX_SEQ_NUM + 1)) {
-        // wait for 2 seconds...
+        // receive ACK from the server
+		// wait for 2 seconds before closing connection
 
         uint32_t serverSeqNum = pkt.hd.seqNum;
 
@@ -243,18 +245,21 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 				}
 				printPacketInfo(pkt, 0, 0, false);
 
-				// todo check whether incoming packet is FIN
+				// check the flag of the packet
+				// drop any other non-FIN packet
+				if(pkt.hd.flags == (1 << 13)) {
+					// send ACK to server
+					pkt.hd.flags = (1 << 15); // set ACKbit = 1
+					pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
+					pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
+					pkt.hd.dataSize = 0;
+					memset(pkt.data, '\0', sizeof(pkt.data));
 
-				// send ACK to server
-				pkt.hd.flags = (1 << 15); // set ACKbit = 1
-				pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
-				pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
-				pkt.hd.dataSize = 0;
-				memset(pkt.data, '\0', sizeof(pkt.data));
-
-				if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
-					std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
-					return false;
+					if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+						std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
+						return false;
+					}
+					printPacketInfo(pkt, 0, 0, true);
 				}
 				printPacketInfo(pkt, 0, 0, true);
 
@@ -284,7 +289,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
         // }
         // printPacketInfo(pkt, cwnd, ssthresh, true);
 
-        // std::cout << "successfully closed connection" << std::endl;
+        std::cout << "successfully closed connection" << std::endl;
         return true;
     }
     
@@ -328,7 +333,7 @@ int main(int argc, char *argv[]){
 	
 	bool connected = initConnection(sockfd, pkt, server_addr, sin_size);
 	if(connected) {
-		transitData(sockfd, pkt, server_addr, sin_size, argv[3]);
+		transmitData(sockfd, pkt, server_addr, sin_size, argv[3]);
         
         if(!closeConnection(sockfd, pkt, server_addr, sin_size)) {
             std::cerr << "ERROR: close connection" << std::endl;
