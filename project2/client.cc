@@ -11,6 +11,7 @@
 #include <ctime>
 #include <thread>
 #include <time.h>
+#include <list>
 
 #include "rdt_header.h"
 
@@ -18,9 +19,8 @@
 #define MAX_BUF_SIZE 512
 #define MAX_SEQ_NUM 25600
 #define MAX_CWND 10240
-
-int cwnd = 512;
-int ssthresh = 5120;
+#define INIT_CWND 512
+#define INIT_SSTHRESH 5120
 
 int wait10Sec(int sockfd) {
     fd_set active_fd_set;
@@ -48,7 +48,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
         std::cerr << "ERROR: initConnection sendto" << std::endl;
 		return false;
 	} else {
-        printPacketInfo(pkt, cwnd, ssthresh, true);
+        printPacketInfo(pkt, 0, 0, true);
 		// receive the SYNACK packet from the server
 
 		int ret = wait10Sec(sockfd);
@@ -65,7 +65,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 			std::cerr << "ERROR: initConnection recvfrom" << std::endl;
 			return false;
 		}
-        printPacketInfo(pkt, cwnd, ssthresh, false);
+        printPacketInfo(pkt, 0, 0, false);
 		// check whether the infomation is right
 		if(pkt.hd.flags == ((1 << 15) | (1 << 14)) && pkt.hd.ackNum == curSeqNum + 1) {
 			pkt.hd.flags = (1 << 15); // set ACKbit = 1
@@ -96,13 +96,20 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 	uint32_t curSeqNum = pkt.hd.seqNum + 1;
 
 	// transit the file
-	cwnd = 1;
+	int cwnd = INIT_CWND; // initial congestion window size
+	int ssthresh = INIT_SSTHRESH; // initial slow start threshold
 	bool eof = false;
+	std::list<packet> senderBuffer;
 	while(!eof) {
-		int cnt = 0;
-		// send multiple packets back-to-back
-		for(; cnt < cwnd; cnt++) {
-			if(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
+		int pktNum = 0;
+		int cwndPkt = cwnd / MAX_BUF_SIZE;
+		// send multiple packets back-to-back, without waiting for ack
+		for(std::list<packet>::iterator it = senderBuffer.begin(); pktNum < cwndPkt; pktNum++) {
+			if(it != senderBuffer.end()) {
+				sendto(sockfd, &(*it), sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
+				printPacketInfo(*it, cwnd, ssthresh, true);
+				it++;
+			} else if(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
 				pkt.hd.flags = 0;
 				pkt.hd.ackNum = 0;
 				pkt.hd.dataSize = is.gcount();
@@ -111,6 +118,8 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 				std::cout << "*sending: " << pkt.hd.dataSize << " Bytes data" << std::endl;
 				sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
 				printPacketInfo(pkt, cwnd, ssthresh, true);
+				// buffer the sent packet
+				senderBuffer.push_back(pkt);
 				uint16_t dataBytes = pkt.hd.dataSize;
 				curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
 			} else {
@@ -123,16 +132,27 @@ void transitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int
 			std::cerr << "ERROR: transitData sock select\n";
 			exit(1);
 		} else if(ret == 0) { // timeout
-			std::cout << "Receive no more packets from client, close connection...\n\n";
+			std::cout << "Receive no more packets from server, close connection...\n\n";
 			close(sockfd);
 			exit(1);
 		}
 		// receive acks for packets in current window
-		for(int i = 0; i < cnt; i++) {
+		for(int i = 0; i < pktNum; i++) {
 			recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
+			if(pkt.hd.ackNum == (senderBuffer.front().hd.seqNum + senderBuffer.front().hd.dataSize) % (MAX_SEQ_NUM + 1)) {
+				// The packet has been successfully received, remove it from buffer
+				senderBuffer.pop_front();
+
+				// slow start
+				if(cwnd < ssthresh) {
+					cwnd += MAX_BUF_SIZE;
+				}
+			} else {
+				//TODO
+			}
 		}
 
-		if(is.gcount() == 0) {
+		if(is.gcount() == 0 && senderBuffer.empty()) {
 			eof = true;
 		}
 	}
@@ -179,14 +199,14 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
         std::cerr << "ERROR: closeConnection FIN sendto" << std::endl;
         return false;
     }
-    printPacketInfo(pkt, cwnd, ssthresh, true);
+    printPacketInfo(pkt, 0, 0, true);
 
     // receive the ACK packet from the server
     if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
         std::cerr << "ERROR: closeConnection ACK recvfrom" << std::endl;
         return false;
     }
-    printPacketInfo(pkt, cwnd, ssthresh, false);
+    printPacketInfo(pkt, 0, 0, false);
 
     if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == (curSeqNum + 1) % (MAX_SEQ_NUM + 1)) {
         // wait for 2 seconds...
@@ -221,7 +241,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 					std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
 					return false;
 				}
-				printPacketInfo(pkt, cwnd, ssthresh, false);
+				printPacketInfo(pkt, 0, 0, false);
 
 				// todo check whether incoming packet is FIN
 
@@ -236,7 +256,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 					std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
 					return false;
 				}
-				printPacketInfo(pkt, cwnd, ssthresh, true);
+				printPacketInfo(pkt, 0, 0, true);
 
 				std::cout << "successfully closed connection" << std::endl;
 			}

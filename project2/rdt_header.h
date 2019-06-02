@@ -10,7 +10,7 @@
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //   |                      Acknowledge Number                       |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//   |A|S|F|                       |          Data size              |
+//   |A|S|F|           0           |          Data size              |
 //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 struct header {
@@ -44,13 +44,13 @@ void printPacketInfo(const packet &pkt, int cwnd, int ssthresh, bool isSent) {
     }
 
     std::cout << pkt.hd.seqNum << " "
-                << pkt.hd.ackNum << " "
-                << "<cwnd> "
-                << "<ssthresh> ";
+              << pkt.hd.ackNum << " "
+              << cwnd << " "
+              << ssthresh;
 
     if(isACK(pkt.hd.flags)) {
         // ACK
-        std::cout << "ACK";
+        std::cout << " ACK";
         if(isSYN(pkt.hd.flags)) {
             std::cout << " SYN";
         } else if(isFIN(pkt.hd.flags)) {
@@ -58,10 +58,10 @@ void printPacketInfo(const packet &pkt, int cwnd, int ssthresh, bool isSent) {
         }
     } else if(isSYN(pkt.hd.flags)) {
         // SYN
-        std::cout << "SYN";
+        std::cout << " SYN";
     } else if(isFIN(pkt.hd.flags)) {
         // FIN
-        std::cout << "FIN";
+        std::cout << " FIN";
     }
 
     std::cout << std::endl;
