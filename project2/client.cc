@@ -102,10 +102,10 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 	uint32_t curSeqNum = pkt.hd.seqNum + 1;
 
 	// transmit the file
-
 	bool eof = false;
 	std::list<packet> senderBuffer;
 	clock_t timer;
+	clock_t lastServerPktTimer;
 	while(!eof) {
 		int pktNum = 0;
 		int cwndPkt = cwnd / MAX_BUF_SIZE;
@@ -140,15 +140,15 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 			}
 		}
 
-		int ret = wait10Sec(sockfd);
-		if(ret < 0) {
-			std::cerr << "ERROR: transitData sock select\n";
-			exit(1);
-		} else if(ret == 0) { // timeout
-			std::cout << "Receive no more packets from server, close connection...\n\n";
-			close(sockfd);
-			exit(1);
-		}
+		// int ret = wait10Sec(sockfd);
+		// if(ret < 0) {
+		// 	std::cerr << "ERROR: transitData sock select\n";
+		// 	exit(1);
+		// } else if(ret == 0) { // timeout
+		// 	std::cout << "Receive no more packets from server, close connection...\n\n";
+		// 	close(sockfd);
+		// 	exit(1);
+		// }
 
 		fd_set active_fd_set;
 		struct timeval timeout;
@@ -166,12 +166,22 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 				std::cerr << "ERROR: receive ACK packet" << std::endl;
             	return ;
 			} else if(ret == 0) {
+				// first check whether the client has not received any more packet from
+				// server for 10sec
+				clock_t currentTime = clock();
+				if((double)(currentTime - lastServerPktTimer) / CLOCKS_PER_SEC > 10) {
+					std::cout << "Receive no more packets from server, close connection...\n\n";
+					close(sockfd);
+					exit(1);
+				}
+
 				// timeout, reset ssthresh and cwnd
 				ssthresh = std::max(cwnd / 2, 1024);
 				cwnd = INIT_CWND;
 				timeout.tv_usec = RTO * 1000;
 			} else {
 				recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
+				lastServerPktTimer = clock();
 				printPacketInfo(pkt, cwnd, ssthresh, false);
 				if(pkt.hd.ackNum == (senderBuffer.front().hd.seqNum + senderBuffer.front().hd.dataSize) % (MAX_SEQ_NUM + 1)) {
 					// The packet has been successfully received, remove it from buffer
@@ -182,7 +192,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 					if(cwnd < ssthresh) {
 						// slow start
 						cwnd += MAX_BUF_SIZE;
-					} else {
+					} else if(cwnd < MAX_CWND) {
 						// congestion avoidance
 						cwnd += (MAX_BUF_SIZE * MAX_BUF_SIZE) / cwnd;
 					}
