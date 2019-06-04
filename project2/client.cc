@@ -196,7 +196,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 						// congestion avoidance
 						cwnd += (MAX_BUF_SIZE * MAX_BUF_SIZE) / cwnd;
 					}
-				} else {
+				} else if(pkt.hd.ackNum == senderBuffer.front().hd.seqNum) { // this packet has lost
 					// check whether timeout occurs
 					clock_t now = clock();
 					double time_elapse = (double)(now - timer) / CLOCKS_PER_SEC;
@@ -207,6 +207,14 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 						// reset ssthresh and cwnd
 						ssthresh = std::max(cwnd / 2, 1024);
 						cwnd = INIT_CWND;
+						timeout.tv_usec = RTO * 1000;
+					}
+				} else { // remove the packets in buffer that have been acked
+					while(!senderBuffer.empty() && senderBuffer.front().hd.seqNum != pkt.hd.ackNum) {
+						senderBuffer.pop_front();
+					}
+					if(!senderBuffer.empty()) {
+						timer = clock();
 						timeout.tv_usec = RTO * 1000;
 					}
 				}
