@@ -26,6 +26,7 @@
 
 int cwnd = INIT_CWND;  // initial window size
 int ssthresh = INIT_SSTHRESH;  // initial slow start threshold
+uint32_t curSeqNum;
 time_t lastServerPktTime;
 
 int wait10Sec(int sockfd) {
@@ -43,7 +44,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 	// initiate connection to the server
 	// make the packet
     srand(2);
-	uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
+	curSeqNum = rand() % (MAX_SEQ_NUM + 1);
 	pkt.hd.flags = (1 << 14); // set SYNbit = 1
 	pkt.hd.seqNum = curSeqNum;
 	pkt.hd.ackNum = 0;
@@ -53,43 +54,43 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 	if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
         std::cerr << "ERROR: initConnection sendto" << std::endl;
 		return false;
-	} else {
-        printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, true);
-		// receive the SYNACK packet from the server
+	}
 
-		int ret = wait10Sec(sockfd);
-		if(ret < 0) {
-			std::cerr << "ERROR: initConnection sock select\n";
-			exit(1);
-		} else if(ret == 0) { // timeout
-			std::cout << "Receive no packet from client, close connection...\n\n";
-			close(sockfd);
-			exit(1);
-		}
+    printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, true);
+	// receive the SYNACK packet from the server
 
-		if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
-			std::cerr << "ERROR: initConnection recvfrom" << std::endl;
-			return false;
-		}
-        printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, false);
-		lastServerPktTime = time(NULL);
-		// check whether the infomation is right
-		if(pkt.hd.flags == ((1 << 15) | (1 << 14)) && pkt.hd.ackNum == curSeqNum + 1) {
-			pkt.hd.flags = (1 << 15); // set ACKbit = 1
-			uint32_t curSeqNum = pkt.hd.ackNum;
-			uint32_t ackNum = pkt.hd.seqNum + 1;
-			pkt.hd.seqNum = curSeqNum;
-			pkt.hd.ackNum = ackNum;
-			// send the last ACK packet in 3 way handshake
-			if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
-				std::cerr << "ERROR: initConnection last ack" << std::endl;
-				return false;
-			}
-			printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, true);
-			return true;
-		}
+	int ret = wait10Sec(sockfd);
+	if(ret < 0) {
+		std::cerr << "ERROR: initConnection sock select\n";
+		exit(1);
+	} else if(ret == 0) { // timeout
+		std::cout << "Receive no packet from client, close connection...\n\n";
+		close(sockfd);
+		exit(1);
+	}
+
+	if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
+		std::cerr << "ERROR: initConnection recvfrom" << std::endl;
 		return false;
 	}
+    printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, false);
+	lastServerPktTime = time(NULL);
+	// check whether the infomation is right
+	if(pkt.hd.flags == ((1 << 15) | (1 << 14)) && pkt.hd.ackNum == (curSeqNum + 1) % (MAX_SEQ_NUM + 1)) {
+		pkt.hd.flags = (1 << 15); // set ACKbit = 1
+		curSeqNum = pkt.hd.ackNum;
+		uint32_t ackNum = (pkt.hd.seqNum + 1) % (MAX_SEQ_NUM + 1);
+		pkt.hd.seqNum = curSeqNum;
+		pkt.hd.ackNum = ackNum;
+		// send the last ACK packet in 3 way handshake
+		if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
+			std::cerr << "ERROR: initConnection last ack" << std::endl;
+			return false;
+		}
+		printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, true);
+		return true;
+	}
+	return false;
 }
 
 void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
@@ -99,9 +100,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 		return;
 	}
 	char filebuf[MAX_BUF_SIZE];
-
-	// start to send data
-	uint32_t curSeqNum = pkt.hd.seqNum + 1;
 
 	// transmit the file
 	bool eof = false;

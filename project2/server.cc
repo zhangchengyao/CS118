@@ -52,7 +52,6 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     printf("receive ACK packet from: %s\n\n", inet_ntoa(their_addr.sin_addr));
     
     if(clientPkt.hd.ackNum == serverSeqNum) {
-        expectedSeqNum = clientPkt.hd.seqNum + 1;
         printf("establish connection with %s:\n\n", inet_ntoa(their_addr.sin_addr));
         return true;
     } else {
@@ -65,9 +64,9 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
     packet serverPkt;
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
 
-    serverPkt.hd.flags |= (1 << 15); // set ACKbit = 1
+    serverPkt.hd.flags = (1 << 15); // set ACKbit = 1
     serverPkt.hd.seqNum = serverSeqNum;
-    serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
+    serverPkt.hd.ackNum = (clientPkt.hd.seqNum + 1) % (MAX_SEQ_NUM + 1);
 
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
         std::cerr << "ERROR: send ACK packet" << std::endl;
@@ -77,10 +76,10 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
 
     std::cout << "send ACK packet to: " << inet_ntoa(their_addr.sin_addr) << "\n\n";
 
-    // ...
 
+    // send FIN to client
     bzero(&serverPkt, sizeof(serverPkt));
-    serverPkt.hd.flags |= (1 << 13); // set FINbit = 1
+    serverPkt.hd.flags = (1 << 13); // set FINbit = 1
     serverPkt.hd.seqNum = serverSeqNum;
     serverPkt.hd.ackNum = 0;
 
@@ -143,7 +142,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
 
         // check whether packets in buffer should be written to the file
         while(!buffer.empty() && buffer.front().hd.seqNum == expectedSeqNum) {
-            dataBytes = buffer.front().hd.dataSize;;
+            dataBytes = buffer.front().hd.dataSize;
 
             if(dataBytes > 0) {
                 std::cout << "write buffered data to file " << dataBytes << " Bytes\n";
@@ -153,7 +152,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
                 os.close();
             }
             expectedSeqNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
-            buffer.erase(buffer.begin());
+            buffer.pop_front();
         }
     } else {
         buffer.push_back(clientPkt);
@@ -165,7 +164,6 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
     }
     printPacketInfo(serverPkt, 0, 0, true);
     std::cout << "send packet to " << inet_ntoa(their_addr.sin_addr) << "\n\n";
-
 }
 
 int wait10Sec(int sockfd) {
@@ -287,7 +285,6 @@ int main(int argc, char *argv[]) {
             pkt.data[len - HEADER_SIZE] = '\0';
             printf("contents: %s\n", pkt.data);
         }
-        
     }
     
 	close(server_sockfd);
