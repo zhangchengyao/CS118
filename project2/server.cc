@@ -22,6 +22,7 @@
 int connectionOrder = 1;
 bool connected = false;
 uint32_t expectedSeqNum;
+uint32_t serverSeqNum;
 
 std::list<packet> buffer;
 
@@ -30,7 +31,8 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     packet serverPkt;
     serverPkt.hd.flags = ((1 << 15) | (1 << 14)); // set ACKbit = 1 and SYNbit = 1
     srand(1);
-    serverPkt.hd.seqNum = rand() % (MAX_SEQ_NUM + 1);
+    serverSeqNum = rand() % (MAX_SEQ_NUM + 1);
+    serverPkt.hd.seqNum = serverSeqNum;
     serverPkt.hd.ackNum = (clientPkt.hd.seqNum + 1) % (MAX_SEQ_NUM + 1);
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
@@ -39,6 +41,7 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     }
     printPacketInfo(serverPkt, 0, 0, true);
     printf("send SYNACK packet to: %s\n\n", inet_ntoa(their_addr.sin_addr));
+    serverSeqNum++;
 
     // receive ACK packet from client, finish 3-way handshake
     if(recvfrom(server_sockfd, &clientPkt, sizeof(clientPkt), 0, (struct sockaddr*) &their_addr, &sin_size) < 0) {
@@ -48,7 +51,7 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     printPacketInfo(clientPkt, 0, 0, false);
     printf("receive ACK packet from: %s\n\n", inet_ntoa(their_addr.sin_addr));
     
-    if(clientPkt.hd.ackNum == serverPkt.hd.seqNum + 1) {
+    if(clientPkt.hd.ackNum == serverSeqNum) {
         expectedSeqNum = clientPkt.hd.seqNum + 1;
         printf("establish connection with %s:\n\n", inet_ntoa(their_addr.sin_addr));
         return true;
@@ -62,11 +65,8 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
     packet serverPkt;
     memset(serverPkt.data, '\0', sizeof(serverPkt.data));
 
-    srand(1);
-    uint32_t seqNum = rand() % (MAX_SEQ_NUM + 1);
-
     serverPkt.hd.flags |= (1 << 15); // set ACKbit = 1
-    serverPkt.hd.seqNum = seqNum;
+    serverPkt.hd.seqNum = serverSeqNum;
     serverPkt.hd.ackNum = clientPkt.hd.seqNum + 1;
 
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
@@ -81,7 +81,7 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
 
     bzero(&serverPkt, sizeof(serverPkt));
     serverPkt.hd.flags |= (1 << 13); // set FINbit = 1
-    serverPkt.hd.seqNum = seqNum;
+    serverPkt.hd.seqNum = serverSeqNum;
     serverPkt.hd.ackNum = 0;
 
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
@@ -126,6 +126,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
     packet serverPkt;
 
     serverPkt.hd.flags = (1 << 15); // set ACKbit = 1
+    serverPkt.hd.seqNum = serverSeqNum;
 
     if(clientPkt.hd.seqNum == expectedSeqNum) {
         int dataBytes = clientPkt.hd.dataSize;
