@@ -26,6 +26,7 @@
 
 int cwnd = INIT_CWND;  // initial window size
 int ssthresh = INIT_SSTHRESH;  // initial slow start threshold
+time_t lastServerPktTime;
 
 int wait10Sec(int sockfd) {
     fd_set active_fd_set;
@@ -71,6 +72,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 			return false;
 		}
         printPacketInfo(pkt, INIT_CWND, INIT_SSTHRESH, false);
+		lastServerPktTime = time(NULL);
 		// check whether the infomation is right
 		if(pkt.hd.flags == ((1 << 15) | (1 << 14)) && pkt.hd.ackNum == curSeqNum + 1) {
 			pkt.hd.flags = (1 << 15); // set ACKbit = 1
@@ -105,7 +107,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 	bool eof = false;
 	std::list<packet> senderBuffer;
 	clock_t timer;
-	clock_t lastServerPktTimer;
 	while(!eof) {
 		int pktNum = 0;
 		int cwndPkt = cwnd / MAX_BUF_SIZE;
@@ -168,8 +169,8 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 			} else if(ret == 0) {
 				// first check whether the client has not received any more packet from
 				// server for 10sec
-				clock_t currentTime = clock();
-				if((double)(currentTime - lastServerPktTimer) / CLOCKS_PER_SEC > 10) {
+				time_t currentTime = time(NULL);
+				if(difftime(currentTime, lastServerPktTime) > 10) {
 					std::cout << "Receive no more packets from server, close connection...\n\n";
 					close(sockfd);
 					exit(1);
@@ -181,7 +182,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 				timeout.tv_usec = RTO * 1000;
 			} else {
 				recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
-				lastServerPktTimer = clock();
+				lastServerPktTime = time(NULL);
 				printPacketInfo(pkt, cwnd, ssthresh, false);
 				if(pkt.hd.ackNum == (senderBuffer.front().hd.seqNum + senderBuffer.front().hd.dataSize) % (MAX_SEQ_NUM + 1)) {
 					// The packet has been successfully received, remove it from buffer
