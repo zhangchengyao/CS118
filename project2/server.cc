@@ -130,8 +130,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
 
     if(clientPkt.hd.seqNum == expectedSeqNum) {
         int dataBytes = clientPkt.hd.dataSize;
-        serverPkt.hd.ackNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
-        expectedSeqNum = serverPkt.hd.ackNum;
+        expectedSeqNum = (expectedSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
 
         // receive the data in client's packet
         if(dataBytes > 0) {
@@ -157,10 +156,9 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
             buffer.erase(buffer.begin());
         }
     } else {
-        serverPkt.hd.ackNum = expectedSeqNum;
         buffer.push_back(clientPkt);
     }
-    
+    serverPkt.hd.ackNum = expectedSeqNum;
     if(sendto(server_sockfd, &serverPkt, sizeof(serverPkt), 0, (struct sockaddr*) &their_addr, sin_size) < 0) {
         std::cerr << "ERROR: send ACK packet in receiveData" << std::endl;
         return;
@@ -270,7 +268,11 @@ int main(int argc, char *argv[]) {
         }
 
         if(connected) {
-            receiveData(pkt, server_sockfd, their_addr, sin_size);
+            int receive = rand() % 10;
+            std::cout << receive << std::endl;
+            if(receive > 0) {
+                receiveData(pkt, server_sockfd, their_addr, sin_size);
+            }
             int ret = wait10Sec(server_sockfd);
             if(ret < 0) {
                 std::cerr << "ERROR: receiveData sock select\n";
