@@ -139,16 +139,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 			}
 		}
 
-		// int ret = wait10Sec(sockfd);
-		// if(ret < 0) {
-		// 	std::cerr << "ERROR: transitData sock select\n";
-		// 	exit(1);
-		// } else if(ret == 0) { // timeout
-		// 	std::cout << "Receive no more packets from server, close connection...\n\n";
-		// 	close(sockfd);
-		// 	exit(1);
-		// }
-
 		fd_set active_fd_set;
 		struct timeval timeout;
 		FD_ZERO(&active_fd_set);
@@ -225,32 +215,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 		}
 	}
 
-	// while(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
-	// 	if(is.gcount() < MAX_BUF_SIZE) {
-	// 		filebuf[is.gcount()] = '\0';
-	// 	}
-	// 	recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
-	// 	while(pkt.hd.ackNum != curSeqNum) {
-	// 		// TODO packet loss
-	// 		std::cout << "duplicate ack!" << std::endl;
-	// 		recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size);
-	// 	}
-	// 	pkt.hd.flags = 0;
-	// 	pkt.hd.ackNum = 0;
-	// 	pkt.hd.reserved = 0;
-	// 	pkt.hd.seqNum = curSeqNum;
-	// 	strcpy(pkt.data, filebuf);
-	// 	std::cout << "sending: " << pkt.data << std::endl;
-	// 	sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
-	// 	curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
-	// }
 	is.close();
-
-	// receive the last ACK from server
-	// if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
-	// 	std::cerr << "ERROR: ackAndTransit recvfrom" << std::endl;
-	// 	return;
-	// }
 }
 
 bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size) {
@@ -268,6 +233,16 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
         return false;
     }
     printPacketInfo(pkt, cwnd, ssthresh, true);
+
+    int ret = wait10Sec(sockfd);
+	if(ret < 0) {
+		std::cerr << "ERROR: closeConnection sock select\n";
+		exit(1);
+	} else if(ret == 0) { // timeout
+		std::cout << "Receive no packet from client, close connection...\n\n";
+		close(sockfd);
+		exit(1);
+	}
 
     // receive the ACK packet from the server
     if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
@@ -296,7 +271,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 			timeout.tv_sec = (int)time_remaining;
     		timeout.tv_usec = (time_remaining - timeout.tv_sec) * 1000000;
 
-			int ret = select(sockfd + 1, &active_fd_set, NULL, NULL, &timeout); 
+			ret = select(sockfd + 1, &active_fd_set, NULL, NULL, &timeout); 
 
 			if(ret < 0) {
 				std::cerr << "ERROR: closeConnection sock select" << std::endl;
@@ -336,25 +311,6 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 			cur = clock();
 			time_elapse = (double)(cur - start) / CLOCKS_PER_SEC;
 		} while(time_elapse < 2.0);
-        
-        // if(recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, &sin_size) < 0) {
-        //     std::cerr << "ERROR: closeConnection FIN recvfrom" << std::endl;
-        //     return false;
-        // }
-        // printPacketInfo(pkt, cwnd, ssthresh, false);
-
-        // // send ACK to server
-        // pkt.hd.flags = (1 << 15); // set ACKbit = 1
-        // pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
-        // pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
-        // pkt.hd.reserved = 0;
-        // memset(pkt.data, '\0', sizeof(pkt.data));
-
-        // if(sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr)) < 0) {
-        //     std::cerr << "ERROR: closeConnection ACK sendto" << std::endl;
-        //     return false;
-        // }
-        // printPacketInfo(pkt, cwnd, ssthresh, true);
 
         std::cout << "successfully closed connection" << std::endl;
         return true;
