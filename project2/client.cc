@@ -123,7 +123,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 				pkt.hd.dataSize = is.gcount();
 				pkt.hd.seqNum = curSeqNum;
 				memcpy(pkt.data, filebuf, MAX_BUF_SIZE);
-				//std::cout << "*sending: " << pkt.hd.dataSize << " Bytes data" << std::endl;
 				sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
 				printPacketInfo(pkt, cwnd, ssthresh, true);
 				// buffer the sent packet
@@ -304,8 +303,6 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 					printPacketInfo(pkt, cwnd, ssthresh, true);
 				}
 				printPacketInfo(pkt, cwnd, ssthresh, true);
-
-				std::cout << "successfully closed connection" << std::endl;
 			}
 
 			cur = clock();
