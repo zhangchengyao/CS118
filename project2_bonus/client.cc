@@ -123,13 +123,16 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 	}
 
 	while(!eof) {
-		for(std::list<packet>::iterator it = senderBuffer.begin(); it != senderBuffer.end(); it++) {
-			sendto(sockfd, &(*it), sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
-			printPacketInfo(*it, cwnd, ssthresh, true);
-			if(it == senderBuffer.begin()) {
-				timer = clock();
-			}
-		}
+		sendto(sockfd, &senderBuffer.front(), sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
+		printPacketInfo(senderBuffer.front(), cwnd, ssthresh, true);
+		timer = clock();
+		// for(std::list<packet>::iterator it = senderBuffer.begin(); it != senderBuffer.end(); it++) {
+		// 	sendto(sockfd, &(*it), sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
+		// 	printPacketInfo(*it, cwnd, ssthresh, true);
+		// 	if(it == senderBuffer.begin()) {
+		// 		timer = clock();
+		// 	}
+		// }
 		
 		fd_set active_fd_set;
 		struct timeval timeout;
