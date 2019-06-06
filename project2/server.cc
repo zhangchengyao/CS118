@@ -52,6 +52,7 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
     printf("receive ACK packet from: %s\n\n", inet_ntoa(their_addr.sin_addr));
     
     if(clientPkt.hd.ackNum == serverSeqNum) {
+        expectedSeqNum = clientPkt.hd.seqNum;
         printf("establish connection with %s:\n\n", inet_ntoa(their_addr.sin_addr));
         return true;
     } else {
@@ -266,7 +267,7 @@ int main(int argc, char *argv[]) {
         }
 
         if(connected) {
-            int receive = rand() % 10;
+            int receive = rand() % 100;
             std::cout << receive << std::endl;
             if(receive > 0) {
                 receiveData(pkt, server_sockfd, their_addr, sin_size);
