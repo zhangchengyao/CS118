@@ -94,7 +94,6 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 }
 
 void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size, char* file) {
-	std::cout << "\n Start transmitting data \n -----------------\n";
 	std::ifstream is(file, std::ios::in | std::ios::binary);
 	if(!is) {
         std::cerr << "ERROR: open file" << std::endl;
@@ -124,7 +123,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 	}
 
 	while(!eof) {
-		
 		for(std::list<packet>::iterator it = senderBuffer.begin(); it != senderBuffer.end(); it++) {
 			sendto(sockfd, &(*it), sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
 			printPacketInfo(*it, cwnd, ssthresh, true);
@@ -229,19 +227,22 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 						}
 					} else if(dupPktCnt > 3) {
 						// another duplicate ACK arrives
-						cwnd += MAX_BUF_SIZE;
-						if(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
-							pkt.hd.flags = 0;
-							pkt.hd.ackNum = 0;
-							pkt.hd.dataSize = is.gcount();
-							pkt.hd.seqNum = curSeqNum;
-							memcpy(pkt.data, filebuf, MAX_BUF_SIZE);
-							sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
-							printPacketInfo(pkt, cwnd, ssthresh, true);
-							// buffer the sent packet
-							senderBuffer.push_back(pkt);
-							uint16_t dataBytes = pkt.hd.dataSize;
-							curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+						if(cwnd < MAX_CWND) {
+							cwnd += MAX_BUF_SIZE;
+
+							if(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
+								pkt.hd.flags = 0;
+								pkt.hd.ackNum = 0;
+								pkt.hd.dataSize = is.gcount();
+								pkt.hd.seqNum = curSeqNum;
+								memcpy(pkt.data, filebuf, MAX_BUF_SIZE);
+								sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &server_addr, sizeof(struct sockaddr));
+								printPacketInfo(pkt, cwnd, ssthresh, true);
+								// buffer the sent packet
+								senderBuffer.push_back(pkt);
+								uint16_t dataBytes = pkt.hd.dataSize;
+								curSeqNum = (curSeqNum + dataBytes) % (MAX_SEQ_NUM + 1);
+							}
 						}
 					}
 				} else {
@@ -277,14 +278,12 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 			}
 		}
 
-
 		if(is.eof() && senderBuffer.empty()) {
 			eof = true;
 		}
 	}
 
 	is.close();
-	std::cout << "\nFinish transmitting data \n -----------------\n";
 }
 
 bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size) {
