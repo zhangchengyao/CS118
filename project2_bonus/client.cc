@@ -64,7 +64,7 @@ bool initConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned 
 		std::cerr << "ERROR: initConnection sock select\n";
 		exit(1);
 	} else if(ret == 0) { // timeout
-		std::cout << "Receive no packet from client, close connection...\n\n";
+		// std::cout << "Receive no packet from client, close connection...\n\n";
 		close(sockfd);
 		exit(1);
 	}
@@ -153,7 +153,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 				// server for 10sec
 				time_t currentTime = time(NULL);
 				if(difftime(currentTime, lastServerPktTime) > 10) {
-					std::cout << "Receive no more packets from server, close connection...\n\n";
+					// std::cout << "Receive no more packets from server, close connection...\n\n";
 					close(sockfd);
 					exit(1);
 				}
@@ -310,7 +310,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 		std::cerr << "ERROR: closeConnection sock select\n";
 		exit(1);
 	} else if(ret == 0) { // timeout
-		std::cout << "Receive no packet from client, close connection...\n\n";
+		// std::cout << "Receive no packet from server, abort connection...\n\n";
 		close(sockfd);
 		exit(1);
 	}
@@ -374,14 +374,13 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 					}
 					printPacketInfo(pkt, cwnd, ssthresh, true);
 				}
-				printPacketInfo(pkt, cwnd, ssthresh, true);
 			}
 
 			cur = clock();
 			time_elapse = (double)(cur - start) / CLOCKS_PER_SEC;
 		} while(time_elapse < 2.0);
 
-        std::cout << "successfully closed connection" << std::endl;
+        // std::cout << "successfully closed connection" << std::endl;
         return true;
     }
     
