@@ -249,6 +249,7 @@ int main(int argc, char *argv[]) {
                     std::ofstream os(filename, std::ios::out | std::ios::binary);
                     os.close();
                     connected = false; // close the connection
+                    connectionOrder++;
                     // std::cout << "Receive no data from client, save empty file and close connection...\n\n";
                     // std::cout << "waiting for a packet...\n\n";
                     continue;
@@ -274,6 +275,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
             } else if(ret == 0) { // timeout
                 connected = false;
+                connectionOrder++;
                 // std::cout << "Receive no more data from client, close connection...\n\n";
                 // std::cout << "waiting for a packet...\n\n";
             }
