@@ -36,7 +36,7 @@ inline bool isFIN(uint16_t flags) {
     return (flags >> 13) & 1;
 }
 
-void printPacketInfo(const packet &pkt, int cwnd, int ssthresh, bool isSent) {
+void printPacketInfo(const packet &pkt, int cwnd, int ssthresh, bool isSent, bool isDup) {
     if(isSent) {
         std::cout << "SEND ";
     } else {
@@ -62,6 +62,10 @@ void printPacketInfo(const packet &pkt, int cwnd, int ssthresh, bool isSent) {
     } else if(isFIN(pkt.hd.flags)) {
         // FIN
         std::cout << " FIN";
+    }
+
+    if(isDup) {
+        std::cout << " DUP";
     }
 
     std::cout << std::endl;
