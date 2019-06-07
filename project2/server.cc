@@ -268,10 +268,7 @@ int main(int argc, char *argv[]) {
         }
 
         if(connected) {
-            int recv = rand() % 100;
-            if(recv > 0) {
-                receiveData(pkt, server_sockfd, their_addr, sin_size);
-            }
+            receiveData(pkt, server_sockfd, their_addr, sin_size);
 
             int ret = wait10Sec(server_sockfd);
             if(ret < 0) {
