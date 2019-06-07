@@ -149,7 +149,12 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 				std::cerr << "ERROR: receive ACK packet" << std::endl;
             	return ;
 			} else if(ret == 0) {
-				// first check whether the client has not received any more packet from
+				// first check whether the data transmission finishes
+				if(is.eof() && senderBuffer.empty()) {
+					break;
+				}
+
+				// then check whether the client has not received any more packet from
 				// server for 10sec
 				time_t currentTime = time(NULL);
 				if(difftime(currentTime, lastServerPktTime) > 10) {
@@ -181,6 +186,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 					} else if(cwnd < MAX_CWND) {
 						// congestion avoidance
 						cwnd += (MAX_BUF_SIZE * MAX_BUF_SIZE) / cwnd;
+						cwnd = std::min(cwnd, MAX_CWND);
 					}
 
 					int pktsToSend = cwnd / MAX_BUF_SIZE - senderBuffer.size();
@@ -232,6 +238,7 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 						// another duplicate ACK arrives
 						if(cwnd < MAX_CWND) {
 							cwnd += MAX_BUF_SIZE;
+							cwnd = std::min(cwnd, MAX_CWND);
 
 							if(is.read(filebuf, sizeof(filebuf)).gcount() > 0) {
 								pkt.hd.flags = 0;
@@ -291,8 +298,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 
 bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size) {
     // send FIN to server
-    srand(2);
-    uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
 	pkt.hd.flags = (1 << 13); // set FINbit = 1
 	pkt.hd.seqNum = curSeqNum;
 	pkt.hd.ackNum = 0;
@@ -304,6 +309,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
         return false;
     }
     printPacketInfo(pkt, cwnd, ssthresh, true);
+	curSeqNum++;
 
     int ret = wait10Sec(sockfd);
 	if(ret < 0) {
@@ -322,7 +328,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
     }
     printPacketInfo(pkt, cwnd, ssthresh, false);
 
-    if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == (curSeqNum + 1) % (MAX_SEQ_NUM + 1)) {
+    if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == curSeqNum ) {
         // receive ACK from the server
 		// wait for 2 seconds before closing connection
 
