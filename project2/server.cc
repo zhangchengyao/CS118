@@ -267,11 +267,8 @@ int main(int argc, char *argv[]) {
         }
 
         if(connected) {
-            int receive = rand() % 100;
-            std::cout << receive << std::endl;
-            if(receive > 0) {
-                receiveData(pkt, server_sockfd, their_addr, sin_size);
-            }
+            receiveData(pkt, server_sockfd, their_addr, sin_size);
+
             int ret = wait10Sec(server_sockfd);
             if(ret < 0) {
                 std::cerr << "ERROR: receiveData sock select\n";

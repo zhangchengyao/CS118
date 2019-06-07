@@ -219,8 +219,6 @@ void transmitData(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned in
 
 bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned int& sin_size) {
     // send FIN to server
-    srand(2);
-    uint32_t curSeqNum = rand() % (MAX_SEQ_NUM + 1);
 	pkt.hd.flags = (1 << 13); // set FINbit = 1
 	pkt.hd.seqNum = curSeqNum;
 	pkt.hd.ackNum = 0;
@@ -232,13 +230,14 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
         return false;
     }
     printPacketInfo(pkt, cwnd, ssthresh, true);
+	curSeqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
 
     int ret = wait10Sec(sockfd);
 	if(ret < 0) {
 		std::cerr << "ERROR: closeConnection sock select\n";
 		exit(1);
 	} else if(ret == 0) { // timeout
-		std::cout << "Receive no packet from client, close connection...\n\n";
+		// std::cout << "Receive no packet from server, abort connection...\n\n";
 		close(sockfd);
 		exit(1);
 	}
@@ -250,7 +249,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
     }
     printPacketInfo(pkt, cwnd, ssthresh, false);
 
-    if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == (curSeqNum + 1) % (MAX_SEQ_NUM + 1)) {
+    if(pkt.hd.flags == (1 << 15) && pkt.hd.ackNum == curSeqNum ) {
         // receive ACK from the server
 		// wait for 2 seconds before closing connection
 
@@ -291,7 +290,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 				if(pkt.hd.flags == (1 << 13)) {
 					// send ACK to server
 					pkt.hd.flags = (1 << 15); // set ACKbit = 1
-					pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
+					pkt.hd.seqNum = curSeqNum;
 					pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
 					pkt.hd.dataSize = 0;
 					memset(pkt.data, '\0', sizeof(pkt.data));
@@ -302,14 +301,13 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 					}
 					printPacketInfo(pkt, cwnd, ssthresh, true);
 				}
-				printPacketInfo(pkt, cwnd, ssthresh, true);
 			}
 
 			cur = clock();
 			time_elapse = (double)(cur - start) / CLOCKS_PER_SEC;
 		} while(time_elapse < 2.0);
 
-        std::cout << "successfully closed connection" << std::endl;
+        // std::cout << "successfully closed connection" << std::endl;
         return true;
     }
     

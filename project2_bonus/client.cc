@@ -309,7 +309,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
         return false;
     }
     printPacketInfo(pkt, cwnd, ssthresh, true);
-	curSeqNum++;
+	curSeqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
 
     int ret = wait10Sec(sockfd);
 	if(ret < 0) {
@@ -369,7 +369,7 @@ bool closeConnection(int sockfd, packet& pkt, sockaddr_in& server_addr, unsigned
 				if(pkt.hd.flags == (1 << 13)) {
 					// send ACK to server
 					pkt.hd.flags = (1 << 15); // set ACKbit = 1
-					pkt.hd.seqNum = (curSeqNum + 1) % MAX_SEQ_NUM;
+					pkt.hd.seqNum = curSeqNum;
 					pkt.hd.ackNum = (serverSeqNum + 1) % MAX_SEQ_NUM;
 					pkt.hd.dataSize = 0;
 					memset(pkt.data, '\0', sizeof(pkt.data));
