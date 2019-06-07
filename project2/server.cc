@@ -39,7 +39,7 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
         std::cerr << "ERROR: send SYNACK packet" << std::endl;
         return false;
     }
-    printPacketInfo(serverPkt, 0, 0, true);
+    printPacketInfo(serverPkt, 0, 0, true, false);
     printf("send SYNACK packet to: %s\n\n", inet_ntoa(their_addr.sin_addr));
     serverSeqNum++;
 
@@ -48,7 +48,7 @@ bool handleConnection(packet& clientPkt, int server_sockfd, sockaddr_in& their_a
         std::cerr << "ERROR: receive ACK from client" << std::endl;
         return false;
     }
-    printPacketInfo(clientPkt, 0, 0, false);
+    printPacketInfo(clientPkt, 0, 0, false, false);
     printf("receive ACK packet from: %s\n\n", inet_ntoa(their_addr.sin_addr));
     
     if(clientPkt.hd.ackNum == serverSeqNum) {
@@ -73,7 +73,7 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: send ACK packet" << std::endl;
         return false;
     }
-    printPacketInfo(serverPkt, 0, 0, true);
+    printPacketInfo(serverPkt, 0, 0, true, false);
 
     std::cout << "send ACK packet to: " << inet_ntoa(their_addr.sin_addr) << "\n\n";
 
@@ -88,7 +88,7 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: send FIN packet" << std::endl;
         return false;
     }
-    printPacketInfo(serverPkt, 0, 0, true);
+    printPacketInfo(serverPkt, 0, 0, true, false);
 
     std::cout << "send FIN packet to: " << inet_ntoa(their_addr.sin_addr) << "\n\n";
 
@@ -97,7 +97,7 @@ bool closeConnection(packet& clientPkt, int server_sockfd, sockaddr_in &their_ad
         std::cerr << "ERROR: receive ACK from client" << std::endl;
         return false;
     }
-    printPacketInfo(clientPkt, 0, 0, false);
+    printPacketInfo(clientPkt, 0, 0, false, false);
     std::cout << "receive ACK from: " << inet_ntoa(their_addr.sin_addr) << "\n\n";
 
     connectionOrder++;
@@ -163,7 +163,7 @@ void receiveData(packet& clientPkt, int server_sockfd, sockaddr_in &their_addr, 
         std::cerr << "ERROR: send ACK packet in receiveData" << std::endl;
         return;
     }
-    printPacketInfo(serverPkt, 0, 0, true);
+    printPacketInfo(serverPkt, 0, 0, true, false);
     std::cout << "send packet to " << inet_ntoa(their_addr.sin_addr) << "\n\n";
 }
 
@@ -233,7 +233,7 @@ int main(int argc, char *argv[]) {
             std::cerr << "ERROR: recvfrom" << std::endl;
             return 1;
         }
-        printPacketInfo(pkt, 0, 0, false);
+        printPacketInfo(pkt, 0, 0, false, false);
 
         if(isSYN(pkt.hd.flags)) { // SYNbit = 1
             std::cout << "receive connection from: " << inet_ntoa(their_addr.sin_addr) << "\n\n";
@@ -267,8 +267,11 @@ int main(int argc, char *argv[]) {
         }
 
         if(connected) {
-            receiveData(pkt, server_sockfd, their_addr, sin_size);
-
+            int recv = rand() % 100;
+            if(recv > 0) {
+                receiveData(pkt, server_sockfd, their_addr, sin_size);
+            }
+            
             int ret = wait10Sec(server_sockfd);
             if(ret < 0) {
                 std::cerr << "ERROR: receiveData sock select\n";
